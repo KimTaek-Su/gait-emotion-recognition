@@ -13,14 +13,17 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
-from dotenv import load_dotenv
+
+# 환경 변수 로드 (python-dotenv가 설치된 경우에만)
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # dotenv가 없어도 환경 변수는 os.getenv()로 사용 가능
 
 # 프로젝트 내부 모듈
 from src.feature_extractor import extract_features
 from src.model import predict_emotion
-
-# 환경 변수 로드
-load_dotenv()
 
 # 로깅 설정 (print 대신 logging 사용)
 logging.basicConfig(
