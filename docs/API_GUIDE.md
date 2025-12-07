@@ -56,7 +56,10 @@ GET /health
 POST /predict_emotion
 ```
 
-#### 요청 본문
+#### 📌 두 가지 입력 형식 지원
+
+##### 형식 1: keypoints (딕셔너리 형식)
+API 테스트 및 간단한 사용에 적합
 
 ```json
 {
@@ -86,11 +89,28 @@ POST /predict_emotion
 }
 ```
 
+##### 형식 2: skeleton_data (문자열 배열 형식)
+MediaPipe Pose 웹캠 데이터에 적합
+
+```json
+{
+  "skeleton_data": [
+    "0.5,0.3,0.1",
+    "0.48,0.35,0.12",
+    "0.52,0.35,0.12",
+    ...
+  ],
+  "n_joints": 17
+}
+```
+
 #### 요청 필드 설명
+
+##### keypoints 형식 (형식 1)
 
 | 필드 | 타입 | 필수 | 설명 |
 |------|------|------|------|
-| keypoints | Array | ✅ | 키포인트 데이터 배열 (최소 2개 프레임) |
+| keypoints | Array | ✅* | 키포인트 데이터 배열 (최소 2개 프레임) |
 | keypoints[].nose | [float, float] | ❌ | 코 좌표 [x, y] |
 | keypoints[].left_shoulder | [float, float] | ❌ | 왼쪽 어깨 좌표 [x, y] |
 | keypoints[].right_shoulder | [float, float] | ❌ | 오른쪽 어깨 좌표 [x, y] |
@@ -104,6 +124,17 @@ POST /predict_emotion
 | keypoints[].right_knee | [float, float] | ❌ | 오른쪽 무릎 좌표 [x, y] |
 | keypoints[].left_ankle | [float, float] | ❌ | 왼쪽 발목 좌표 [x, y] |
 | keypoints[].right_ankle | [float, float] | ❌ | 오른쪽 발목 좌표 [x, y] |
+
+*keypoints 또는 skeleton_data 중 하나는 필수
+
+##### skeleton_data 형식 (형식 2)
+
+| 필드 | 타입 | 필수 | 설명 |
+|------|------|------|------|
+| skeleton_data | Array[string] | ✅* | "x,y,z" 형식의 문자열 배열 |
+| n_joints | int | ❌ | 관절 개수 (기본값: 17) |
+
+*keypoints 또는 skeleton_data 중 하나는 필수
 
 #### 성공 응답 (200 OK)
 
@@ -141,30 +172,23 @@ POST /predict_emotion
 
 #### 에러 응답
 
-##### 400 Bad Request - 데이터 부족
+##### 400 Bad Request - 데이터 부족 또는 잘못된 형식
+```json
+{
+  "detail": "keypoints 또는 skeleton_data 중 하나를 제공해야 합니다."
+}
+```
+
 ```json
 {
   "detail": "최소 2개 이상의 프레임이 필요합니다."
 }
 ```
 
-##### 422 Unprocessable Entity - 잘못된 형식
-```json
-{
-  "detail": [
-    {
-      "loc": ["body", "keypoints"],
-      "msg": "field required",
-      "type": "value_error.missing"
-    }
-  ]
-}
-```
-
 ##### 500 Internal Server Error - 서버 오류
 ```json
 {
-  "detail": "서버 내부 오류가 발생했습니다: {error_message}"
+  "detail": "서버 내부 오류가 발생했습니다: 좌표 0 파싱 실패: invalid,data"
 }
 ```
 
@@ -185,24 +209,29 @@ POST /predict_emotion
 
 ---
 
-## 🔍 특징 설명
+## 🔍 특징 설명 (14가지 물리 기반 특징)
 
-추출되는 14가지 특징:
+### A. Kinematics (5개)
+1. **평균 속도**: 전체 움직임의 평균 속도
+2. **최대 속도**: 관찰된 최대 속도
+3. **속도 표준편차**: 속도 변화의 일관성
+4. **평균 가속도**: 속도 변화율
+5. **평균 저크**: 가속도 변화율 (부드러움 측정)
 
-1. **avg_speed**: 평균 속도
-2. **stride_length**: 보폭
-3. **step_frequency**: 발걸음 빈도
-4. **body_sway**: 상체 흔들림
-5. **arm_swing**: 팔 스윙
-6. **head_tilt**: 머리 기울기
-7. **posture_openness**: 자세 개방도
-8. **vertical_bounce**: 수직 움직임
-9. **foot_drag**: 발 끌림
-10. **asymmetry**: 비대칭성
-11. **step_regularity**: 걸음 규칙성
-12. **energy**: 에너지
-13. **gait_phase_duration**: 걸음 단계 지속시간
-14. **center_of_mass_displacement**: 무게중심 이동
+### B. Body parts (3개)
+6. **손 움직임**: 손목(관절 5, 6)의 평균 속도
+7. **발 움직임**: 발목(관절 11, 12)의 평균 속도
+8. **좌우 대칭성**: 좌우 움직임의 차이
+
+### C. Volume (1개)
+9. **바운딩 박스 부피**: 신체가 차지하는 공간의 크기
+
+### D. Posture (2개)
+10. **머리 기울기**: 머리의 수직 위치
+11. **척추 길이**: 어깨-엉덩이 거리
+
+### E. Joint variance (3개)
+12-14. **관절 분산 상위 3개**: 가장 많이 움직이는 관절들
 
 ---
 
@@ -256,7 +285,7 @@ print(f"예측된 감정: {result['emotion']}")
 print(f"신뢰도: {result['confidence']:.2%}")
 ```
 
-### JavaScript (fetch)
+### JavaScript (fetch) - keypoints 형식
 
 ```javascript
 const url = 'http://localhost:8000/predict_emotion';
@@ -289,6 +318,39 @@ fetch(url, {
   });
 ```
 
+### JavaScript (fetch) - skeleton_data 형식 (웹캠용)
+
+```javascript
+const url = 'http://localhost:8000/predict_emotion';
+
+// 5 프레임 x 17 관절 = 85개 좌표
+const skeleton_data = [];
+for (let frame = 0; frame < 5; frame++) {
+  for (let joint = 0; joint < 17; joint++) {
+    const x = 0.5 + frame * 0.01 + joint * 0.02;
+    const y = 0.3 + frame * 0.01 + joint * 0.03;
+    const z = 0.1 + frame * 0.005;
+    skeleton_data.push(`${x},${y},${z}`);
+  }
+}
+
+fetch(url, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    skeleton_data: skeleton_data,
+    n_joints: 17
+  })
+})
+  .then(response => response.json())
+  .then(result => {
+    console.log('예측된 감정:', result.emotion);
+    console.log('신뢰도:', result.confidence);
+  });
+```
+
 ---
 
 ## 🔒 보안 고려사항
@@ -302,10 +364,33 @@ fetch(url, {
 
 ## 📈 성능 최적화 팁
 
-1. **프레임 수**: 최소 2개, 권장 10~30개
+1. **프레임 수**: 
+   - keypoints 형식: 최소 2개, 권장 10~30개
+   - skeleton_data 형식: 최소 4프레임 자동 패딩, 권장 30~300개 (1~10초)
 2. **키포인트**: 더 많은 키포인트를 제공할수록 정확도 향상
 3. **데이터 품질**: 깨끗하고 일관된 데이터 사용
 4. **배치 처리**: 여러 예측을 순차적으로 처리하는 것보다 배치로 처리
+
+## 🎥 MediaPipe Pose 통합
+
+프론트엔드에서 MediaPipe Pose를 사용할 때:
+
+1. **관절 매핑**: MediaPipe의 33개 관절을 17개로 매핑
+   ```javascript
+   const MEDIAPIPE_TO_17_JOINTS = [
+     0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28, 5, 2, 7, 8
+   ];
+   ```
+
+2. **프레임 수집**: 최소 30프레임 (약 1초) 수집 권장
+
+3. **데이터 전송**: skeleton_data 형식으로 전송
+   ```javascript
+   {
+     skeleton_data: allFrames.flat(),  // 모든 프레임을 하나의 배열로
+     n_joints: 17
+   }
+   ```
 
 ---
 
