@@ -55,9 +55,10 @@ class KeypointData(BaseModel):
     left_ankle: List[float] = Field(default=None, description="왼쪽 발목 좌표 [x, y]")
     right_ankle: List[float] = Field(default=None, description="오른쪽 발목 좌표 [x, y]")
     
-    class Config:
+    model_config = {
         # None 값을 가진 필드는 자동으로 제외
-        exclude_none = True
+        "exclude_none": True
+    }
 
 
 class PredictionRequest(BaseModel):
@@ -70,7 +71,7 @@ class PredictionRequest(BaseModel):
     keypoints: List[Dict] = Field(
         ..., 
         description="키포인트 데이터 리스트 (각 프레임별)",
-        min_items=2
+        min_length=2
     )
 
 
