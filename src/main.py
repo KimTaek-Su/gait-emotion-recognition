@@ -8,7 +8,7 @@
 
 import logging
 import os
-from typing import List, Dict
+from typing import List, Dict, Optional, Union
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -22,7 +22,7 @@ except ImportError:
     pass  # dotenv가 없어도 환경 변수는 os.getenv()로 사용 가능
 
 # 프로젝트 내부 모듈
-from src.feature_extractor import extract_features
+from src.feature_extractor import extract_features, extract_features_from_skeleton
 from src.model import predict_emotion
 
 # 로깅 설정 (print 대신 logging 사용)
@@ -67,14 +67,21 @@ class KeypointData(BaseModel):
 class PredictionRequest(BaseModel):
     """
     감정 예측 요청 데이터
-    
-    여러 프레임의 키포인트 데이터를 포함합니다.
-    최소 2개 이상의 프레임이 필요합니다.
+    두 가지 형식 모두 지원:
+    1. keypoints: [{"nose": [x,y], ...}, ...] - 딕셔너리 형식
+    2. skeleton_data: ["x,y,z", "x,y,z", ...] - 문자열 배열 형식
     """
-    keypoints: List[Dict] = Field(
-        ..., 
-        description="키포인트 데이터 리스트 (각 프레임별)",
-        min_length=2
+    keypoints: Optional[List[Dict]] = Field(
+        default=None,
+        description="키포인트 데이터 리스트 (딕셔너리 형식)"
+    )
+    skeleton_data: Optional[List[str]] = Field(
+        default=None,
+        description="스켈레톤 데이터 (문자열 배열 형식: 'x,y,z')"
+    )
+    n_joints: int = Field(
+        default=17,
+        description="관절 개수 (기본값: 17)"
     )
 
 
@@ -103,11 +110,15 @@ app = FastAPI(
 
 # CORS 설정 (Cross-Origin Resource Sharing)
 # 프론트엔드에서 API를 호출할 수 있도록 허용
-allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5500,http://127.0.0.1:5500").split(",")
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "*")
+if allowed_origins == "*":
+    allowed_origins = ["*"]
+else:
+    allowed_origins = allowed_origins.split(",")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,  # 허용할 도메인 목록
+    allow_origins=allowed_origins,  # 모든 origin 허용 (개발용)
     allow_credentials=True,
     allow_methods=["*"],            # 모든 HTTP 메서드 허용 (GET, POST, etc.)
     allow_headers=["*"],            # 모든 헤더 허용
@@ -176,21 +187,34 @@ async def predict_emotion_endpoint(request: PredictionRequest):
         HTTPException: 데이터 처리 중 오류 발생 시
     """
     try:
-        logger.info(f"감정 예측 요청 수신: {len(request.keypoints)}개 프레임")
-        
-        # 1단계: 키포인트 데이터 검증
-        if not request.keypoints or len(request.keypoints) < 2:
-            logger.warning("키포인트 데이터 부족")
+        # 1단계: 데이터 형식 확인 및 검증
+        if request.skeleton_data:
+            logger.info(f"감정 예측 요청 수신: skeleton_data 형식, {len(request.skeleton_data)}개 좌표")
+            # 2단계: skeleton_data 형식 처리
+            logger.info("특징 추출 시작 (skeleton_data)...")
+            features = extract_features_from_skeleton(
+                request.skeleton_data,
+                n_joints=request.n_joints
+            )
+            logger.info(f"특징 추출 완료: {features.shape}")
+        elif request.keypoints:
+            logger.info(f"감정 예측 요청 수신: keypoints 형식, {len(request.keypoints)}개 프레임")
+            # 키포인트 데이터 검증
+            if len(request.keypoints) < 2:
+                logger.warning("키포인트 데이터 부족")
+                raise HTTPException(
+                    status_code=400,
+                    detail="최소 2개 이상의 프레임이 필요합니다."
+                )
+            # 2단계: keypoints 형식 처리
+            logger.info("특징 추출 시작 (keypoints)...")
+            features = extract_features(request.keypoints)
+            logger.info(f"특징 추출 완료: {features.shape}")
+        else:
             raise HTTPException(
                 status_code=400,
-                detail="최소 2개 이상의 프레임이 필요합니다."
+                detail="keypoints 또는 skeleton_data 중 하나를 제공해야 합니다."
             )
-        
-        # 2단계: 특징 추출
-        # feature_extractor.py의 extract_features 함수 사용
-        logger.info("특징 추출 시작...")
-        features = extract_features(request.keypoints)
-        logger.info(f"특징 추출 완료: {features.shape}")
         
         # 3단계: 감정 예측
         # model.py의 predict_emotion 함수 사용
