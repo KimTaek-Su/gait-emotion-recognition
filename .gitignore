@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+.env
+.env.local
+*.local
+.vscode/
+.idea/
+.pytest_cache/
+*.log
+logs/
+.DS_Store
+*.joblib
+*.pkl

@@ -1,0 +1,14 @@
+version: '3.8'
+services:
+  api:
+    build: .
+    container_name: gait-emotion-api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./src:/app/src
+      - ./models:/app/models
+    environment:
+      - ENV=development
+      - LOG_LEVEL=DEBUG
+    restart: unless-stopped

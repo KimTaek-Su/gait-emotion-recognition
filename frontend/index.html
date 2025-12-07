@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>걸음걸이 감정 인식 시스템</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+            max-width: 800px;
+            width: 100%;
+        }
+
+        h1 {
+            color: #667eea;
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+
+        .info-box {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            margin-bottom: 30px;
+            border-radius: 5px;
+        }
+
+        .info-box p {
+            color: #555;
+            line-height: 1.6;
+        }
+
+        .input-section {
+            margin-bottom: 30px;
+        }
+
+        .input-section h2 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+
+        textarea {
+            width: 100%;
+            height: 200px;
+            padding: 15px;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            resize: vertical;
+            transition: border-color 0.3s;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        button {
+            flex: 1;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .result-section {
+            margin-top: 30px;
+            padding: 25px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            display: none;
+        }
+
+        .result-section.show {
+            display: block;
+            animation: slideIn 0.5s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .emotion-result {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .emotion-icon {
+            font-size: 5em;
+            margin-bottom: 10px;
+        }
+
+        .emotion-label {
+            font-size: 2em;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .confidence {
+            font-size: 1.2em;
+            color: #666;
+        }
+
+        .confidence-level {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            margin-left: 10px;
+            font-size: 0.9em;
+        }
+
+        .confidence-level.high {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .confidence-level.medium {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .confidence-level.low {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .probabilities {
+            margin-top: 20px;
+        }
+
+        .probabilities h3 {
+            color: #333;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        .prob-bar {
+            margin-bottom: 15px;
+        }
+
+        .prob-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+
+        .prob-bar-container {
+            background: #e0e0e0;
+            border-radius: 10px;
+            height: 30px;
+            overflow: hidden;
+        }
+
+        .prob-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            border-radius: 10px;
+            transition: width 0.5s ease;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding-right: 10px;
+            color: white;
+            font-weight: bold;
+        }
+
+        .warning {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 20px;
+            color: #856404;
+        }
+
+        .warning::before {
+            content: "⚠️ ";
+        }
+
+        .error {
+            background: #f8d7da;
+            border: 1px solid #dc3545;
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 20px;
+            color: #721c24;
+        }
+
+        .error::before {
+            content: "❌ ";
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #667eea;
+            font-size: 1.2em;
+        }
+
+        .loading::after {
+            content: "...";
+            animation: dots 1.5s steps(4, end) infinite;
+        }
+
+        @keyframes dots {
+            0%, 20% { content: "."; }
+            40% { content: ".."; }
+            60%, 100% { content: "..."; }
+        }
+
+        .footer {
+            margin-top: 30px;
+            text-align: center;
+            color: #999;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚶 걸음걸이 감정 인식</h1>
+        <p class="subtitle">AI가 당신의 걸음걸이로 감정을 분석합니다</p>
+
+        <div class="info-box">
+            <p>
+                <strong>사용 방법:</strong><br>
+                1. 아래 입력창에 걸음걸이 키포인트 데이터를 JSON 형식으로 입력하세요.<br>
+                2. "샘플 데이터 로드" 버튼으로 예제를 확인할 수 있습니다.<br>
+                3. "감정 분석" 버튼을 클릭하여 감정을 예측합니다.
+            </p>
+        </div>
+
+        <div class="input-section">
+            <h2>📊 키포인트 데이터 입력</h2>
+            <textarea id="keypointsInput" placeholder='[
+  {
+    "nose": [100, 200],
+    "left_shoulder": [90, 220],
+    "right_shoulder": [110, 220],
+    ...
+  }
+]'></textarea>
+            <div class="button-group">
+                <button class="btn-secondary" onclick="loadSampleData()">📝 샘플 데이터 로드</button>
+                <button class="btn-primary" onclick="predictEmotion()" id="predictBtn">🔍 감정 분석</button>
+            </div>
+        </div>
+
+        <div id="resultSection" class="result-section">
+            <!-- 결과가 여기에 표시됩니다 -->
+        </div>
+
+        <div class="footer">
+            <p>Powered by FastAPI & Machine Learning | v1.0.0</p>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
