@@ -7,6 +7,36 @@
 // API 서버 URL (환경에 따라 변경 필요)
 const API_URL = 'http://localhost:8000';
 
+// MediaPipe 33개 관절 → 17개 관절 매핑
+const MEDIAPIPE_TO_17_JOINTS = [
+    0,   // 0: nose
+    11,  // 1: left_shoulder
+    12,  // 2: right_shoulder
+    13,  // 3: left_elbow
+    14,  // 4: right_elbow
+    15,  // 5: left_wrist
+    16,  // 6: right_wrist
+    23,  // 7: left_hip
+    24,  // 8: right_hip
+    25,  // 9: left_knee
+    26,  // 10: right_knee
+    27,  // 11: left_ankle
+    28,  // 12: right_ankle
+    5,   // 13: left_eye
+    2,   // 14: right_eye
+    7,   // 15: left_ear
+    8    // 16: right_ear
+];
+
+// 프레임 버퍼 (최소 30프레임 = 약 1초)
+let skeletonDataBuffer = [];
+const MIN_FRAMES = 30;
+
+// MediaPipe Pose 관련 변수
+let pose = null;
+let camera = null;
+let isWebcamActive = false;
+
 /**
  * 샘플 키포인트 데이터 생성
  * 실제로는 비디오 분석이나 센서로부터 얻어진 데이터를 사용합니다.
@@ -64,35 +94,35 @@ function loadSampleData() {
 }
 
 /**
- * 감정 아이콘 반환
+ * 감정 아이콘 반환 - 6가지 감정 (대소문자 무관)
  */
 function getEmotionIcon(emotion) {
+    const emotionLower = emotion.toLowerCase();
     const icons = {
         'happy': '😊',
         'sad': '😢',
+        'fear': '😨',
+        'disgust': '🤢',
         'angry': '😠',
-        'neutral': '😐',
-        'surprised': '😲',
-        'fearful': '😨',
-        'disgusted': '🤢'
+        'neutral': '😐'
     };
-    return icons[emotion] || '😐';
+    return icons[emotionLower] || '😐';
 }
 
 /**
- * 감정 레이블 한글 변환
+ * 감정 레이블 한글 변환 - 6가지 감정
  */
 function getEmotionLabel(emotion) {
+    const emotionLower = emotion.toLowerCase();
     const labels = {
         'happy': '행복',
         'sad': '슬픔',
+        'fear': '공포',
+        'disgust': '혐오',
         'angry': '분노',
-        'neutral': '중립',
-        'surprised': '놀람',
-        'fearful': '두려움',
-        'disgusted': '혐오'
+        'neutral': '중립'
     };
-    return labels[emotion] || emotion;
+    return labels[emotionLower] || emotion;
 }
 
 /**
@@ -278,3 +308,204 @@ async function testConnection() {
 
 // 페이지 로드 시 연결 테스트
 testConnection();
+
+/**
+ * MediaPipe 결과를 서버 형식으로 변환
+ */
+function convertToServerFormat(poseLandmarks) {
+    const skeleton_data = [];
+    
+    for (const mpIndex of MEDIAPIPE_TO_17_JOINTS) {
+        const landmark = poseLandmarks[mpIndex];
+        if (landmark) {
+            skeleton_data.push(`${landmark.x},${landmark.y},${landmark.z}`);
+        } else {
+            skeleton_data.push("0.0,0.0,0.0");
+        }
+    }
+    
+    return skeleton_data;
+}
+
+/**
+ * 웹캠 시작
+ */
+async function startWebcam() {
+    if (isWebcamActive) {
+        console.log('웹캠이 이미 실행 중입니다.');
+        return;
+    }
+
+    try {
+        // MediaPipe Pose 초기화
+        if (!pose) {
+            pose = new Pose({
+                locateFile: (file) => {
+                    return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
+                }
+            });
+            
+            pose.setOptions({
+                modelComplexity: 1,
+                smoothLandmarks: true,
+                enableSegmentation: false,
+                minDetectionConfidence: 0.5,
+                minTrackingConfidence: 0.5
+            });
+            
+            pose.onResults(onPoseResults);
+        }
+
+        // 웹캠 스트림 가져오기
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: { width: 640, height: 480 }
+        });
+        
+        const videoElement = document.getElementById('webcam');
+        videoElement.srcObject = stream;
+        
+        // 카메라 초기화
+        camera = new Camera(videoElement, {
+            onFrame: async () => {
+                await pose.send({ image: videoElement });
+            },
+            width: 640,
+            height: 480
+        });
+        
+        await camera.start();
+        
+        // UI 업데이트
+        isWebcamActive = true;
+        skeletonDataBuffer = [];
+        document.getElementById('videoContainer').style.display = 'block';
+        document.getElementById('webcamStatus').textContent = '🟢 웹캠 실행 중 - 프레임 수집: 0';
+        document.getElementById('webcamStatus').className = 'webcam-status active';
+        document.getElementById('startWebcamBtn').disabled = true;
+        document.getElementById('stopWebcamBtn').disabled = false;
+        document.getElementById('analyzeWebcamBtn').disabled = false;
+        
+        console.log('✅ 웹캠 시작 성공');
+    } catch (error) {
+        console.error('❌ 웹캠 시작 실패:', error);
+        displayError(`웹캠 시작 실패: ${error.message}`);
+    }
+}
+
+/**
+ * 웹캠 중지
+ */
+function stopWebcam() {
+    if (camera) {
+        camera.stop();
+        camera = null;
+    }
+    
+    const videoElement = document.getElementById('webcam');
+    if (videoElement.srcObject) {
+        videoElement.srcObject.getTracks().forEach(track => track.stop());
+        videoElement.srcObject = null;
+    }
+    
+    isWebcamActive = false;
+    document.getElementById('videoContainer').style.display = 'none';
+    document.getElementById('webcamStatus').textContent = '웹캠이 꺼져 있습니다';
+    document.getElementById('webcamStatus').className = 'webcam-status';
+    document.getElementById('startWebcamBtn').disabled = false;
+    document.getElementById('stopWebcamBtn').disabled = true;
+    document.getElementById('analyzeWebcamBtn').disabled = true;
+    
+    console.log('웹캠 중지');
+}
+
+/**
+ * MediaPipe Pose 결과 처리
+ */
+function onPoseResults(results) {
+    if (!results.poseLandmarks) {
+        return;
+    }
+    
+    // 캔버스에 포즈 그리기
+    const canvasElement = document.getElementById('output_canvas');
+    const videoElement = document.getElementById('webcam');
+    canvasElement.width = videoElement.videoWidth;
+    canvasElement.height = videoElement.videoHeight;
+    
+    const canvasCtx = canvasElement.getContext('2d');
+    canvasCtx.save();
+    canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+    
+    // 포즈 그리기
+    drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS, {
+        color: '#00FF00',
+        lineWidth: 4
+    });
+    drawLandmarks(canvasCtx, results.poseLandmarks, {
+        color: '#FF0000',
+        lineWidth: 2
+    });
+    
+    canvasCtx.restore();
+    
+    // 스켈레톤 데이터를 버퍼에 추가
+    const skeleton_data = convertToServerFormat(results.poseLandmarks);
+    skeletonDataBuffer.push(skeleton_data);
+    
+    // 버퍼 크기 제한 (최대 300프레임 = 약 10초)
+    if (skeletonDataBuffer.length > 300) {
+        skeletonDataBuffer.shift();
+    }
+    
+    // 상태 업데이트
+    const status = document.getElementById('webcamStatus');
+    if (skeletonDataBuffer.length >= MIN_FRAMES) {
+        status.textContent = `🔴 수집 완료 - 프레임: ${skeletonDataBuffer.length}개 (분석 가능)`;
+        status.className = 'webcam-status recording';
+    } else {
+        status.textContent = `🟡 프레임 수집 중: ${skeletonDataBuffer.length}/${MIN_FRAMES}`;
+        status.className = 'webcam-status active';
+    }
+}
+
+/**
+ * 웹캠에서 감정 분석
+ */
+async function analyzeFromWebcam() {
+    if (skeletonDataBuffer.length < MIN_FRAMES) {
+        displayError(`최소 ${MIN_FRAMES}개 프레임이 필요합니다. 현재: ${skeletonDataBuffer.length}개`);
+        return;
+    }
+    
+    // 모든 프레임의 skeleton_data를 하나의 배열로 합침
+    const allSkeletonData = skeletonDataBuffer.flat();
+    
+    console.log(`분석 시작: ${skeletonDataBuffer.length}개 프레임, ${allSkeletonData.length}개 좌표`);
+    
+    try {
+        showLoading();
+        
+        const response = await fetch(`${API_URL}/predict_emotion`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                skeleton_data: allSkeletonData,
+                n_joints: 17
+            })
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.detail || '서버 오류');
+        }
+        
+        const data = await response.json();
+        displayResult(data);
+        
+        console.log('✅ 분석 완료:', data);
+        
+    } catch (error) {
+        console.error('❌ 분석 실패:', error);
+        displayError(`오류: ${error.message}`);
+    }
+}

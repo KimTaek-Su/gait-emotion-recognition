@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>걸음걸이 감정 인식 시스템</title>
+    <!-- MediaPipe 스크립트 추가 -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
     <style>
         * {
             margin: 0;
@@ -286,6 +290,61 @@
             color: #999;
             font-size: 0.9em;
         }
+
+        /* 웹캠 섹션 스타일 */
+        .webcam-section {
+            margin-top: 30px;
+            padding: 25px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+
+        .webcam-section h2 {
+            color: #333;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .video-container {
+            position: relative;
+            width: 100%;
+            max-width: 640px;
+            margin: 0 auto 20px;
+            background: #000;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        #webcam {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        #output_canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .webcam-status {
+            text-align: center;
+            margin-bottom: 15px;
+            font-size: 1em;
+            color: #666;
+        }
+
+        .webcam-status.active {
+            color: #28a745;
+            font-weight: bold;
+        }
+
+        .webcam-status.recording {
+            color: #dc3545;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -302,8 +361,22 @@
             </p>
         </div>
 
+        <div class="webcam-section">
+            <h2>📹 실시간 웹캠 분석</h2>
+            <div class="webcam-status" id="webcamStatus">웹캠이 꺼져 있습니다</div>
+            <div class="video-container" style="display: none;" id="videoContainer">
+                <video id="webcam" autoplay playsinline></video>
+                <canvas id="output_canvas"></canvas>
+            </div>
+            <div class="button-group">
+                <button class="btn-primary" onclick="startWebcam()" id="startWebcamBtn">📹 웹캠 시작</button>
+                <button class="btn-secondary" onclick="stopWebcam()" id="stopWebcamBtn" disabled>⏹️ 웹캠 중지</button>
+                <button class="btn-primary" onclick="analyzeFromWebcam()" id="analyzeWebcamBtn" disabled>🔍 감정 분석</button>
+            </div>
+        </div>
+
         <div class="input-section">
-            <h2>📊 키포인트 데이터 입력</h2>
+            <h2>📊 키포인트 데이터 입력 (API 테스트용)</h2>
             <textarea id="keypointsInput" placeholder='[
   {
     "nose": [100, 200],
