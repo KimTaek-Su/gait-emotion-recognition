@@ -273,6 +273,32 @@ def test_predict_emotion_with_minimal_skeleton_data():
     assert len(data["features"]) == 14
 
 
+def test_predict_emotion_with_invalid_skeleton_data():
+    """
+    잘못된 skeleton_data 형식으로 감정 예측 테스트
+    
+    파싱 에러가 적절히 처리되는지 확인합니다.
+    """
+    # 잘못된 형식의 skeleton_data (쉼표가 2개만 있음)
+    skeleton_data = [
+        "0.5,0.3",  # z 좌표 누락
+        "0.6,0.4,0.1"
+    ]
+    
+    response = client.post(
+        "/predict_emotion",
+        json={
+            "skeleton_data": skeleton_data,
+            "n_joints": 1
+        }
+    )
+    
+    # 서버 내부 오류 (500) 반환
+    assert response.status_code == 500
+    data = response.json()
+    assert "detail" in data
+
+
 if __name__ == "__main__":
     # pytest 실행
     pytest.main([__file__, "-v"])

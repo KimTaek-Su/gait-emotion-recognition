@@ -18,14 +18,24 @@ def parse_skeleton_data(skeleton_data: List[str], n_joints: int = 17) -> np.ndar
     
     Returns:
         (n_frames, n_joints, 3) 형태의 numpy 배열
+    
+    Raises:
+        ValueError: 잘못된 데이터 형식인 경우
     """
     coords = []
-    for s in skeleton_data:
-        parts = s.split(',')
-        coords.append([float(parts[0]), float(parts[1]), float(parts[2])])
+    for i, s in enumerate(skeleton_data):
+        try:
+            parts = s.split(',')
+            if len(parts) != 3:
+                raise ValueError(f"좌표 {i}에 3개의 값이 필요합니다. 현재: {len(parts)}개")
+            coords.append([float(parts[0]), float(parts[1]), float(parts[2])])
+        except (ValueError, IndexError) as e:
+            raise ValueError(f"좌표 {i} 파싱 실패: {s}. 오류: {str(e)}")
     
     coords = np.array(coords)
     n_frames = len(coords) // n_joints
+    if n_frames == 0:
+        raise ValueError(f"데이터가 부족합니다. 최소 {n_joints}개의 좌표가 필요합니다.")
     return coords.reshape(n_frames, n_joints, 3)
 
 
@@ -132,12 +142,22 @@ def extract_features_from_skeleton(skeleton_data: List[str], n_joints: int = 17)
     
     # B. Body parts (3개)
     # 손 움직임 (관절 5, 6: 왼쪽/오른쪽 손목)
-    hand_joints = [5, 6] if n_joints > 6 else [min(5, n_joints-1)]
-    features[5] = np.mean(vel_magnitude[:, hand_joints])
+    if n_joints > 6:
+        hand_joints = [5, 6]
+        features[5] = np.mean(vel_magnitude[:, hand_joints])
+    elif n_joints > 1:
+        features[5] = np.mean(vel_magnitude[:, -1])  # 마지막 관절 사용
+    else:
+        features[5] = 0.0
     
     # 발 움직임 (관절 11, 12: 왼쪽/오른쪽 발목)
-    foot_joints = [11, 12] if n_joints > 12 else [min(11, n_joints-1)]
-    features[6] = np.mean(vel_magnitude[:, foot_joints])
+    if n_joints > 12:
+        foot_joints = [11, 12]
+        features[6] = np.mean(vel_magnitude[:, foot_joints])
+    elif n_joints > 1:
+        features[6] = np.mean(vel_magnitude[:, -1])  # 마지막 관절 사용
+    else:
+        features[6] = 0.0
     
     # 좌우 대칭성 (왼손 vs 오른손 속도 차이)
     if n_joints > 6:

@@ -313,11 +313,24 @@ testConnection();
  * MediaPipe 결과를 서버 형식으로 변환
  */
 function convertToServerFormat(poseLandmarks) {
+    // 입력 검증
+    if (!poseLandmarks || !Array.isArray(poseLandmarks)) {
+        console.warn('Invalid poseLandmarks:', poseLandmarks);
+        return null;
+    }
+    
+    // MediaPipe Pose는 33개 랜드마크 반환 (인덱스 0-32)
+    if (poseLandmarks.length < 33) {
+        console.warn(`Not enough landmarks. Expected 33, got ${poseLandmarks.length}`);
+        return null;
+    }
+    
     const skeleton_data = [];
     
     for (const mpIndex of MEDIAPIPE_TO_17_JOINTS) {
         const landmark = poseLandmarks[mpIndex];
-        if (landmark) {
+        if (landmark && typeof landmark.x === 'number' && 
+            typeof landmark.y === 'number' && typeof landmark.z === 'number') {
             skeleton_data.push(`${landmark.x},${landmark.y},${landmark.z}`);
         } else {
             skeleton_data.push("0.0,0.0,0.0");
@@ -422,7 +435,8 @@ function stopWebcam() {
  * MediaPipe Pose 결과 처리
  */
 function onPoseResults(results) {
-    if (!results.poseLandmarks) {
+    if (!results || !results.poseLandmarks || !Array.isArray(results.poseLandmarks)) {
+        console.warn('Invalid pose results:', results);
         return;
     }
     
@@ -450,7 +464,12 @@ function onPoseResults(results) {
     
     // 스켈레톤 데이터를 버퍼에 추가
     const skeleton_data = convertToServerFormat(results.poseLandmarks);
-    skeletonDataBuffer.push(skeleton_data);
+    if (skeleton_data) {
+        skeletonDataBuffer.push(skeleton_data);
+    } else {
+        console.warn('Failed to convert pose landmarks to skeleton data');
+        return;
+    }
     
     // 버퍼 크기 제한 (최대 300프레임 = 약 10초)
     if (skeletonDataBuffer.length > 300) {
