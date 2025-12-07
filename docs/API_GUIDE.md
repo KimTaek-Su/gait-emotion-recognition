@@ -109,13 +109,16 @@ POST /predict_emotion
 
 ```json
 {
-  "emotion": "happy",
+  "emotion": "Happy",
   "confidence": 0.850,
   "confidence_level": "high",
   "probabilities": {
-    "happy": 0.850,
-    "sad": 0.100,
-    "angry": 0.050
+    "Happy": 0.650,
+    "Sad": 0.100,
+    "Fear": 0.080,
+    "Disgust": 0.070,
+    "Angry": 0.050,
+    "Neutral": 0.050
   },
   "features": [1.5, 0.6, 2.5, 0.15, 0.4, 0.05, 0.7, 0.3, 0.1, 0.05, 0.85, 1.2, 0.4, 0.35],
   "features_shape": [14],
@@ -127,10 +130,10 @@ POST /predict_emotion
 
 | 필드 | 타입 | 설명 |
 |------|------|------|
-| emotion | string | 예측된 감정 (happy, sad, angry, neutral 등) |
+| emotion | string | 예측된 감정 (Happy, Sad, Fear, Disgust, Angry, Neutral) |
 | confidence | float | 예측 신뢰도 (0.0 ~ 1.0) |
 | confidence_level | string | 신뢰도 수준 (high, medium, low) |
-| probabilities | object | 각 감정별 확률 분포 |
+| probabilities | object | 각 감정별 확률 분포 (6가지 감정) |
 | features | array | 추출된 14개 특징값 |
 | features_shape | array | 특징 배열의 shape |
 | message | string | 결과 메시지 |
@@ -173,10 +176,12 @@ POST /predict_emotion
 
 | 감정 | 영문 코드 | 설명 |
 |------|-----------|------|
-| 행복 | happy | 빠르고 경쾌한 걸음 |
-| 슬픔 | sad | 느리고 무거운 걸음 |
-| 분노 | angry | 빠르지만 불규칙한 걸음 |
-| 중립 | neutral | 평범한 걸음 |
+| 행복 | Happy | 빠르고 경쾌한 걸음, 큰 보폭, 활발한 팔 움직임 |
+| 슬픔 | Sad | 느리고 무거운 걸음, 작은 보폭, 머리를 숙임 |
+| 공포 | Fear | 경계하는 걸음, 경직된 자세, 불규칙한 걸음 |
+| 혐오 | Disgust | 느린 속도, 움츠린 자세, 제한된 움직임 |
+| 분노 | Angry | 빠르지만 불규칙한 걸음, 경직된 자세 |
+| 중립 | Neutral | 평범하고 일정한 걸음걸이 |
 
 ---
 

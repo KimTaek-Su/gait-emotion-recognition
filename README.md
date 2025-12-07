@@ -1,7 +1,7 @@
 # 🚶 걸음걸이 감정 인식 시스템
 
-![Python](https://img.shields.io/badge/Python-3.11-blue)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.109.1-green)
+![Python](https://img.shields.io/badge/Python-3.10-blue)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.123.9-green)
 ![Docker](https://img.shields.io/badge/Docker-Ready-blue)
 ![License](https://img.shields.io/badge/License-MIT-yellow)
 
@@ -39,10 +39,12 @@
 
 ### 🔍 걸음걸이로 알 수 있는 것들
 
-- **행복**: 빠르고 경쾌한 걸음, 큰 보폭, 활발한 팔 움직임
-- **슬픔**: 느리고 무거운 걸음, 작은 보폭, 머리를 숙임
-- **분노**: 빠르지만 불규칙한 걸음, 경직된 자세
-- **중립**: 평범하고 일정한 걸음걸이
+- **행복(Happy)**: 빠르고 경쾌한 걸음, 큰 보폭, 활발한 팔 움직임
+- **슬픔(Sad)**: 느리고 무거운 걸음, 작은 보폭, 머리를 숙임
+- **공포(Fear)**: 경계하는 걸음, 경직된 자세, 불규칙한 걸음
+- **혐오(Disgust)**: 느린 속도, 움츠린 자세, 제한된 움직임
+- **분노(Angry)**: 빠르지만 불규칙한 걸음, 경직된 자세
+- **중립(Neutral)**: 평범하고 일정한 걸음걸이
 
 ## ✨ 주요 특징
 
@@ -87,24 +89,26 @@
 ## 🛠 기술 스택
 
 ### 백엔드
-- **Python 3.11**: 주 프로그래밍 언어
-- **FastAPI 0.109.1**: 고성능 웹 프레임워크 (ReDoS 취약점 패치)
-- **Uvicorn 0.24.0**: ASGI 서버
-- **Pydantic 2.5.0**: 데이터 검증
+- **Python 3.10**: 주 프로그래밍 언어
+- **FastAPI 0.123.9**: 고성능 웹 프레임워크
+- **Uvicorn 0.38.0**: ASGI 서버
+- **Pydantic 2.12.5**: 데이터 검증
 
 ### 머신러닝
-- **scikit-learn 1.3.2**: Random Forest 분류기
-- **NumPy 1.26.4**: 수치 연산
-- **joblib 1.3.2**: 모델 저장/로드
+- **scikit-learn 1.6.1**: Random Forest 분류기
+- **NumPy 2.2.6**: 수치 연산
+- **joblib 1.5.2**: 모델 저장/로드
+
+### 컴퓨터 비전
+- **OpenCV 4.12.0.88**: 이미지 및 비디오 처리
 
 ### 인프라
 - **Docker**: 컨테이너화
 - **docker-compose**: 멀티 컨테이너 관리
 
 ### 개발 도구
-- **pytest 7.4.3**: 테스트 프레임워크
-- **httpx 0.25.2**: 비동기 HTTP 클라이언트
-- **python-dotenv 1.0.0**: 환경 변수 관리
+- **pytest**: 테스트 프레임워크
+- **httpx**: 비동기 HTTP 클라이언트
 
 ## 📊 성능 지표
 
@@ -115,10 +119,22 @@
 | **정확도** | 90.79% |
 | **모델** | Random Forest |
 | **특징 수** | 14개 |
-| **지원 감정** | 4가지 (happy, sad, angry, neutral) |
+| **지원 감정** | 6가지 (Happy, Sad, Fear, Disgust, Angry, Neutral) |
 | **응답 시간** | < 100ms |
 
 ## 🚀 시작하기
+
+### 환경 정보
+
+이 프로젝트는 다음 환경에서 테스트되었습니다:
+
+- **Python 버전**: 3.10
+- **주요 패키지**:
+  - FastAPI 0.123.9
+  - scikit-learn 1.6.1
+  - NumPy 2.2.6
+  - OpenCV 4.12.0.88
+- **지원 감정**: Happy, Sad, Fear, Disgust, Angry, Neutral (6가지)
 
 ### 사전 요구사항
 
@@ -127,7 +143,7 @@
 - docker-compose 1.29 이상
 
 #### 로컬 실행 시
-- Python 3.11 이상
+- Python 3.10 이상
 - pip
 
 ---

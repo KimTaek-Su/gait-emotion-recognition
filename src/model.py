@@ -14,6 +14,9 @@ import joblib
 # 로깅 설정
 logger = logging.getLogger(__name__)
 
+# 감정 클래스 (6가지)
+EMOTION_CLASSES = ["Happy", "Sad", "Fear", "Disgust", "Angry", "Neutral"]
+
 
 class EmotionModel:
     """
@@ -138,6 +141,8 @@ class EmotionModel:
         규칙 설명:
         - Happy (행복): 빠른 속도 + 큰 보폭 + 높은 에너지 + 자연스러운 팔 스윙
         - Sad (슬픔): 느린 속도 + 작은 보폭 + 낮은 에너지 + 머리 숙임
+        - Fear (공포): 중간 속도 + 불규칙한 걸음 + 경직된 자세 + 높은 긴장도
+        - Disgust (혐오): 느린 속도 + 움츠린 자세 + 낮은 자세 개방도
         - Angry (분노): 빠른 속도 + 불규칙한 걸음 + 높은 에너지 + 경직된 자세
         - Neutral (중립): 위 조건에 모두 해당하지 않는 경우
         """
@@ -155,6 +160,8 @@ class EmotionModel:
         # 감정별 점수 계산
         happy_score = 0.0
         sad_score = 0.0
+        fear_score = 0.0
+        disgust_score = 0.0
         angry_score = 0.0
         neutral_score = 0.5  # 기본값
         
@@ -182,6 +189,30 @@ class EmotionModel:
         if vertical_bounce < 0.15:
             sad_score += 0.15
         
+        # Fear 조건: 경계하는 걸음
+        if 0.9 < avg_speed < 1.4 and step_regularity < 0.65:
+            fear_score += 0.3
+        if posture_openness < 0.45:  # 경직되고 움츠린 자세
+            fear_score += 0.25
+        if arm_swing < 0.3:  # 팔 움직임 제한적
+            fear_score += 0.2
+        if energy > 0.9 and energy < 1.3:  # 중간 긴장도
+            fear_score += 0.15
+        if stride_length < 0.5:  # 짧은 보폭
+            fear_score += 0.1
+        
+        # Disgust 조건: 움츠리고 거부하는 걸음
+        if avg_speed < 1.0 and posture_openness < 0.4:
+            disgust_score += 0.3
+        if head_tilt < -0.05:  # 약간 머리를 숙이거나 돌림
+            disgust_score += 0.2
+        if arm_swing < 0.25:  # 제한된 팔 움직임
+            disgust_score += 0.2
+        if stride_length < 0.45:  # 작은 보폭
+            disgust_score += 0.15
+        if vertical_bounce < 0.2:  # 낮은 수직 움직임
+            disgust_score += 0.15
+        
         # Angry 조건: 빠르지만 불규칙한 걸음
         if avg_speed > 1.3 and step_regularity < 0.6:
             angry_score += 0.3
@@ -196,10 +227,12 @@ class EmotionModel:
         
         # 가장 높은 점수를 가진 감정 선택
         scores = {
-            "happy": happy_score,
-            "sad": sad_score,
-            "angry": angry_score,
-            "neutral": neutral_score
+            "Happy": happy_score,
+            "Sad": sad_score,
+            "Fear": fear_score,
+            "Disgust": disgust_score,
+            "Angry": angry_score,
+            "Neutral": neutral_score
         }
         
         # 점수 정규화 (합이 1이 되도록)
@@ -210,12 +243,14 @@ class EmotionModel:
                 for emotion, score in scores.items()
             }
         else:
-            # 모든 점수가 0인 경우 중립으로 설정
+            # 모든 점수가 0인 경우 균등 분포
             probabilities = {
-                "happy": 0.25,
-                "sad": 0.25,
-                "angry": 0.25,
-                "neutral": 0.25
+                "Happy": 1.0/6,
+                "Sad": 1.0/6,
+                "Fear": 1.0/6,
+                "Disgust": 1.0/6,
+                "Angry": 1.0/6,
+                "Neutral": 1.0/6
             }
         
         # 가장 확률이 높은 감정 선택
