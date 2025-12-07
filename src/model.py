@@ -35,6 +35,10 @@ class EmotionModel:
         """
         self.model_path = model_path
         self.model = None
+        self.scaler = None           # 추가: 스케일러
+        self.label_encoder = None    # 추가: 레이블 인코더
+        self.classes = None          # 추가: 감정 클래스 목록
+        self.feature_dim = 14        # 추가: 특징 차원
         self.use_fallback = False
         
         # 모델 로드 시도
@@ -43,13 +47,35 @@ class EmotionModel:
     def _load_model(self):
         """
         joblib으로 저장된 모델 파일을 로드합니다.
-        모델 파일이 없으면 fallback 모드로 전환합니다.
+        모델 파일이 딕셔너리 형태인 경우 각 컴포넌트를 추출합니다.
         """
         if os.path.exists(self.model_path):
             try:
-                self.model = joblib.load(self.model_path)
-                logger.info(f"모델을 성공적으로 로드했습니다: {self.model_path}")
-                self.use_fallback = False
+                data = joblib.load(self.model_path)
+                
+                # 딕셔너리 형태인 경우 (새 형식)
+                if isinstance(data, dict):
+                    self.model = data.get('model')
+                    self.scaler = data.get('scaler')
+                    self.label_encoder = data.get('label_encoder')
+                    self.classes = data.get('classes')
+                    self.feature_dim = data.get('feature_dim', 14)
+                    
+                    logger.info(f"모델을 성공적으로 로드했습니다: {self.model_path}")
+                    logger.info(f"감정 클래스: {self.classes}")
+                    logger.info(f"교차검증 정확도: {data.get('cv_accuracy', 'N/A')}")
+                    
+                    if self.model is None:
+                        logger.warning("딕셔너리에 'model' 키가 없습니다. 규칙 기반 예측을 사용합니다.")
+                        self.use_fallback = True
+                    else:
+                        self.use_fallback = False
+                else:
+                    # 직접 모델 객체인 경우 (구 형식)
+                    self.model = data
+                    self.use_fallback = False
+                    logger.info(f"모델을 성공적으로 로드했습니다 (구 형식): {self.model_path}")
+                    
             except Exception as e:
                 logger.warning(f"모델 로드 실패: {e}. 규칙 기반 예측을 사용합니다.")
                 self.use_fallback = True
@@ -95,24 +121,42 @@ class EmotionModel:
             # 특징을 2D 배열로 변환 (모델 입력 형식)
             features_2d = features.reshape(1, -1)
             
+            # 스케일러가 있으면 특징 정규화
+            if self.scaler is not None:
+                features_2d = self.scaler.transform(features_2d)
+                logger.debug("특징 정규화 완료")
+            
             # 예측 수행
             prediction = self.model.predict(features_2d)[0]
+            
+            # 레이블 인코더가 있으면 디코딩
+            if self.label_encoder is not None:
+                # prediction이 숫자인 경우 디코딩
+                if isinstance(prediction, (int, np.integer)):
+                    prediction = self.label_encoder.inverse_transform([prediction])[0]
             
             # 확률 예측 (모델이 predict_proba를 지원하는 경우)
             if hasattr(self.model, 'predict_proba'):
                 probabilities = self.model.predict_proba(features_2d)[0]
-                emotion_labels = self.model.classes_
+                
+                # 클래스 레이블 가져오기
+                if self.classes is not None:
+                    emotion_labels = self.classes
+                elif self.label_encoder is not None:
+                    emotion_labels = self.label_encoder.classes_
+                else:
+                    emotion_labels = self.model.classes_
                 
                 # 확률을 딕셔너리로 변환
                 prob_dict = {
-                    label: float(prob) 
+                    str(label): float(prob) 
                     for label, prob in zip(emotion_labels, probabilities)
                 }
                 
                 confidence = float(max(probabilities))
             else:
                 # predict_proba가 없는 경우 기본값 설정
-                prob_dict = {prediction: 1.0}
+                prob_dict = {str(prediction): 1.0}
                 confidence = 1.0
             
             return {
