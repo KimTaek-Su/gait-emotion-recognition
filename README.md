@@ -1,7 +1,7 @@
 # 🚶 걸음걸이 감정 인식 시스템
 
 ![Python](https://img.shields.io/badge/Python-3.11-blue)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.104.1-green)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.109.1-green)
 ![Docker](https://img.shields.io/badge/Docker-Ready-blue)
 ![License](https://img.shields.io/badge/License-MIT-yellow)
 
@@ -88,7 +88,7 @@
 
 ### 백엔드
 - **Python 3.11**: 주 프로그래밍 언어
-- **FastAPI 0.104.1**: 고성능 웹 프레임워크
+- **FastAPI 0.109.1**: 고성능 웹 프레임워크 (ReDoS 취약점 패치)
 - **Uvicorn 0.24.0**: ASGI 서버
 - **Pydantic 2.5.0**: 데이터 검증
 
