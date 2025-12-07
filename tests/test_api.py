@@ -109,8 +109,7 @@ def test_predict_emotion_with_insufficient_data():
     """
     부족한 데이터로 감정 예측 테스트
     
-    프레임이 2개 미만일 때 422 에러를 반환하는지 확인합니다.
-    (Pydantic validation error)
+    프레임이 2개 미만일 때 400 에러를 반환하는지 확인합니다.
     """
     # 프레임이 1개만 있는 데이터
     insufficient_keypoints = [
@@ -126,7 +125,7 @@ def test_predict_emotion_with_insufficient_data():
         json={"keypoints": insufficient_keypoints}
     )
     
-    assert response.status_code == 422  # Pydantic validation error
+    assert response.status_code == 400  # Bad request
     data = response.json()
     assert "detail" in data
 
@@ -135,15 +134,14 @@ def test_predict_emotion_with_empty_data():
     """
     빈 데이터로 감정 예측 테스트
     
-    빈 키포인트 리스트를 보낼 때 422 에러를 반환하는지 확인합니다.
-    (Pydantic validation error)
+    빈 키포인트 리스트를 보낼 때 400 에러를 반환하는지 확인합니다.
     """
     response = client.post(
         "/predict_emotion",
         json={"keypoints": []}
     )
     
-    assert response.status_code == 422  # Pydantic validation error
+    assert response.status_code == 400  # Bad request
     data = response.json()
     assert "detail" in data
 
@@ -152,14 +150,14 @@ def test_predict_emotion_with_invalid_format():
     """
     잘못된 형식으로 감정 예측 테스트
     
-    키포인트 필드가 없을 때 422 에러를 반환하는지 확인합니다.
+    키포인트 필드가 없을 때 400 에러를 반환하는지 확인합니다.
     """
     response = client.post(
         "/predict_emotion",
         json={"invalid_field": []}
     )
     
-    assert response.status_code == 422  # Validation error
+    assert response.status_code == 400  # Bad request
 
 
 def test_predict_emotion_probabilities_sum():
@@ -206,7 +204,99 @@ def test_cors_headers():
     )
     
     # CORS 헤더가 응답에 포함되어 있는지 확인
-    assert "access-control-allow-origin" in response.headers or response.status_code in [200, 422]
+    assert "access-control-allow-origin" in response.headers or response.status_code in [200, 400]
+
+
+def test_predict_emotion_with_skeleton_data():
+    """
+    skeleton_data 형식으로 감정 예측 테스트
+    
+    새로운 skeleton_data 형식이 정상적으로 작동하는지 확인합니다.
+    """
+    # 17개 관절 x 5 프레임 = 85개의 좌표
+    skeleton_data = []
+    for frame_idx in range(5):
+        for joint_idx in range(17):
+            x = 0.5 + frame_idx * 0.01 + joint_idx * 0.02
+            y = 0.3 + frame_idx * 0.01 + joint_idx * 0.03
+            z = 0.1 + frame_idx * 0.005
+            skeleton_data.append(f"{x},{y},{z}")
+    
+    response = client.post(
+        "/predict_emotion",
+        json={
+            "skeleton_data": skeleton_data,
+            "n_joints": 17
+        }
+    )
+    
+    assert response.status_code == 200
+    data = response.json()
+    
+    # 응답 데이터 검증
+    assert "emotion" in data
+    assert "confidence" in data
+    assert "confidence_level" in data
+    assert "probabilities" in data
+    assert "features" in data
+    assert "message" in data
+    
+    # 특징이 14개인지 확인
+    assert len(data["features"]) == 14
+
+
+def test_predict_emotion_with_minimal_skeleton_data():
+    """
+    최소한의 skeleton_data로 감정 예측 테스트
+    
+    4프레임 미만의 데이터도 패딩을 통해 처리되는지 확인합니다.
+    """
+    # 17개 관절 x 2 프레임 = 34개의 좌표 (최소 프레임보다 적음)
+    skeleton_data = []
+    for frame_idx in range(2):
+        for joint_idx in range(17):
+            x = 0.5 + frame_idx * 0.01 + joint_idx * 0.02
+            y = 0.3 + frame_idx * 0.01 + joint_idx * 0.03
+            z = 0.1 + frame_idx * 0.005
+            skeleton_data.append(f"{x},{y},{z}")
+    
+    response = client.post(
+        "/predict_emotion",
+        json={
+            "skeleton_data": skeleton_data,
+            "n_joints": 17
+        }
+    )
+    
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["features"]) == 14
+
+
+def test_predict_emotion_with_invalid_skeleton_data():
+    """
+    잘못된 skeleton_data 형식으로 감정 예측 테스트
+    
+    파싱 에러가 적절히 처리되는지 확인합니다.
+    """
+    # 잘못된 형식의 skeleton_data (쉼표가 2개만 있음)
+    skeleton_data = [
+        "0.5,0.3",  # z 좌표 누락
+        "0.6,0.4,0.1"
+    ]
+    
+    response = client.post(
+        "/predict_emotion",
+        json={
+            "skeleton_data": skeleton_data,
+            "n_joints": 1
+        }
+    )
+    
+    # 서버 내부 오류 (500) 반환
+    assert response.status_code == 500
+    data = response.json()
+    assert "detail" in data
 
 
 if __name__ == "__main__":
