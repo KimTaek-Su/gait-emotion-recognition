@@ -13,7 +13,7 @@ venv/
 logs/
 .DS_Store
 # *.joblib
-*.pkl
+# *.pkl
 # Python Virtual Environments
 venv/
 venv310/ 
