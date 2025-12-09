@@ -219,7 +219,7 @@ async def predict_emotion_endpoint(request: PredictionRequest):
         # 3단계: 감정 예측
         # model.py의 predict_emotion 함수 사용
         logger.info("감정 예측 시작...")
-        model_path = os.getenv("MODEL_PATH", "models/rf_emotion_model.joblib")
+        model_path = os.getenv("MODEL_PATH", "models/deployment/gait_emotion_api_model.joblib")
         prediction = predict_emotion(features, model_path)
         logger.info(f"감정 예측 완료: {prediction['emotion']} (신뢰도: {prediction['confidence']:.2f})")
         
