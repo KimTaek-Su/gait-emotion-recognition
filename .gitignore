@@ -17,6 +17,7 @@ logs/
 # Python Virtual Environments
 venv/
 venv310/ 
+.venv310/
 *.pyc
 
 # Joblib Model Files (이미 커밋된 모델 파일이 있다면 제외)
