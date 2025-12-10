@@ -9,6 +9,8 @@
 
 사람의 걸음걸이(Gait)는 감정 상태에 따라 미묘하게 변화합니다. 이 프로젝트는 **KNN (K-Nearest Neighbors)** 머신러닝 모델을 활용하여 걸음걸이 데이터로부터 감정(행복, 슬픔, 분노 등)을 자동으로 예측하는 REST API를 제공합니다.
 
+---
+
 ## 📖 목차
 
 - [프로젝트 소개](#-프로젝트-소개)
@@ -96,26 +98,28 @@
 - joblib 1.5.2 (모델 직렬화/역직렬화)
 - numpy 2.2.6
 
-**컴퓨터 비전**
-- OpenCV 4.12.0.88 (키포인트 처리 등)
+**컴퓨터 비전 등 분석**
+- OpenCV 4.12.0.88 (키포인트 처리)
+- MediaPipe (사전 키포인트 추출)
 
 **인프라**
-- Docker, docker-compose
+- Docker / docker-compose
 
 **개발 도구**
 - pytest, httpx (테스트)
+- Git LFS (모델 및 대용량 파일 관리)
 
 ---
 
 ## 📊 성능 지표
 
-| 모델 아키텍처 | 사용 특징 | 정확도 | 응답 시간 | 비고           |
-| :------------ | :------- | :----- | :-------- | :------------- |
-| KNN (최종 배포)         | 14개 HCF      | 96.99%   | 0.048 ms  | 최고 성능 및 속도  |
-| Bi-LSTM HCF Fusion      | Raw+HCF       | 94.66%   | 약 80ms    | 고성능 딥러닝      |
-| Bi-LSTM                | Raw-only      | 92.61%   | 약 55ms    | 시계열 딥러닝      |
-| Random Forest          | 14개 HCF      | 72.81%   | 0.072 ms   | 빠른 전통 ML       |
-| SVM                    | 14개 HCF      | 34.42%   | 약 15ms    | 전통 ML            |
+| 모델 아키텍처           | 사용 특징   | 정확도   | 응답 시간  | 비고               |
+| :--------------------- | :--------- | :------ | :-------- | :----------------- |
+| KNN (최종 배포)        | 14개 HCF   | 96.99%  | 0.048 ms  | 최고 성능 및 속도  |
+| Bi-LSTM HCF Fusion     | Raw+HCF    | 94.66%  | 약 80ms   | 고성능 딥러닝      |
+| Bi-LSTM                | Raw-only   | 92.61%  | 약 55ms   | 시계열 딥러닝      |
+| Random Forest          | 14개 HCF   | 72.81%  | 0.072 ms  | 빠른 전통 ML       |
+| SVM                    | 14개 HCF   | 34.42%  | 약 15ms   | 전통 ML            |
 
 ### ✅ 모델 선정 근거
 
@@ -129,13 +133,14 @@
 
 MediaPipe 등에서 추출된 키포인트를 기반으로 아래와 같은 14가지 특징 벡터를 산출합니다.
 
-- 관절 각도/변화율 (무릎, 엉덩이, 발목)
-- 보폭 길이, 신체 중심점 이동(Axis/COM)
+- 관절 각도/변화율 (무릎, 엉덩이, 발목 등)
+- 보폭 길이, 신체 중심점 이동
 - 어깨/골반 비율, 상체 기울기(Variance)
 - 신체 부위 이동 속도, 걸음 리듬 등
 
 > 상세 구현: `src/feature_extractor.py` 참조  
-> 딥러닝/ML모델 학습 과정 및 연구용 코드: `models/research/` 참조
+> 분석/추출 예시 스크립트: `gait_emotion_predict.py`, `extract_gait_keypoints.py`  
+> 딥러닝 및 연구용 모델/코드는 `models/research/` 확인
 
 ---
 
@@ -143,20 +148,21 @@ MediaPipe 등에서 추출된 키포인트를 기반으로 아래와 같은 14�
 
 ### 환경 정보
 
-- Python 3.10 이상 (torch, scikit-learn, FastAPI 등 라이브러리 사용)
+- Python 3.10 이상
 - 지원 감정: Happy, Sad, Fear, Disgust, Angry, Neutral (6가지)
 
 ### 사전 요구사항
 
-- **Docker:** v20.10 이상 권장, docker-compose v1.29 이상
-- **로컬 실행:** Python 3.10+, pip, (Windows/Mac/Linux 모두 지원)
-- **대용량 모델 파일:** LFS(Git Large File Storage) 설치 필요
+- **Docker:** v20.10 이상 권장, docker-compose v1.29+
+- **로컬 실행:** Python 3.10+, pip
+- **대용량 모델 파일:** LFS(Git Large File Storage) 설치 필요  
+    (`git lfs install`, `git lfs pull`)
 
 ---
 
 ### 1. Docker로 실행 (권장)
 
-모든 의존성과 환경을 알아서 세팅할 수 있습니다.
+모든 의존성 및 실행환경 자동 셋업.
 
 ```bash
 # 1. 저장소 클론
@@ -166,39 +172,38 @@ cd gait-emotion-recognition
 # 2. Docker Compose로 빌드 및 실행
 docker-compose up --build
 
-# 3. 서버 접속
-# http://localhost:8000/docs 에서 Swagger 테스트 가능
-# http://localhost:8000      (기본 API)
+# 3. 서버 접속/확인
+# Swagger 테스트: http://localhost:8000/docs
+# API 기본주소: http://localhost:8000
 ```
 
-> **참고:** Docker 기반 실행 시 모델은 `models/deployment/KNN_best_model.joblib`를 자동으로 로드합니다.
+> **참고:** Docker 실행 시 `models/deployment/KNN_best_model.joblib`을 자동 로드합니다.
 
 ---
 
 ### 2. 로컬 환경에서 실행
 
-직접 Python으로 실행하는 방법입니다.
+Python 직접 실행용 안내입니다.
 
 ```bash
 # 1. 저장소 클론
 git clone https://github.com/KimTaek-Su/gait-emotion-recognition.git
 cd gait-emotion-recognition
 
-# 2. Python 환경 준비 (가상환경 권장)
+# 2. Python 가상환경 (권장)
 python -m venv venv
 source venv/bin/activate       # (Linux/macOS)
 venv\Scripts\activate          # (Windows)
 
-# 3. 의존 패키지 설치
+# 3. 패키지 설치
 pip install -r requirements.txt
 
-# 4. (필요시) LFS 모델 파일을 로컬에 다운로드
+# 4. (필요시, 대용량 모델) LFS 모델다운
 git lfs install
 git lfs pull
 
 # 5. 서버 실행
 python main.py
-# http://localhost:8000/docs 에서 문서 확인 및 API 테스트 가능
 ```
 
 ---
@@ -213,11 +218,15 @@ gait-emotion-recognition/
 ├── requirements.txt
 ├── main.py
 ├── src/
-│   ├── feature_extractor.py
+│   ├── feature_extractor.py         # 14가지 특징(HCF) 추출
+│   └── model.py
+├── scripts/
+│   ├── gait_emotion_predict.py      # 예시: 특징 추출/감정예측 유틸
+│   ├── extract_gait_keypoints.py    # 예시: 영상 → 키포인트 변환
 │   └── ...
 ├── models/
 │   ├── deployment/
-│   │   └── KNN_best_model.joblib
+│   │   └── KNN_best_model.joblib    # 최종 KNN 모델 (LFS 관리)
 │   └── research/
 │       ├── bi_lstm_hcf.pt
 │       ├── svm_model.pkl
@@ -230,21 +239,21 @@ gait-emotion-recognition/
 │   └── ...
 └── .gitattributes
 ```
-
-- **main.py**: FastAPI 서버 및 비즈니스 로직
-- **src/**: 특징 추출 등 데이터 전처리, 유틸리티
-- **models/**: 배포 및 연구용 모델 파일 분리
-- **frontend/**: 웹 데모 및 간이 테스트 페이지
-- **tests/**: 단위 및 통합 테스트
-- **.gitattributes**: LFS 파일 관리 확장자 설정
+- **main.py**: FastAPI 서버 진입점
+- **src/**: 특징 추출/모델 관리 등 내부 로직
+- **scripts/**: 분석/추출/개별 실행 테스트 스크립트(별도 실행)
+- **models/**: 모델 파일 (LFS 대상)
+- **frontend/**: 웹 데모
+- **tests/**: 자동화 테스트
+- **.gitattributes**: LFS용 확장자 관리
 
 ---
 
 ## 🔌 API 사용법
 
 ### 문서 및 UI 테스트
-- Swagger/OpenAPI 기반 자동 문서 제공
-- 서버 실행 후 [`http://localhost:8000/docs`](http://localhost:8000/docs) 접속
+
+- FastAPI 자동 문서: [`http://localhost:8000/docs`](http://localhost:8000/docs)
 
 ### 주요 엔드포인트 예시
 
@@ -253,90 +262,87 @@ gait-emotion-recognition/
 POST /predict-emotion
 ```
 
-- **입력 (application/json)**
-    ```json
-    {
-      "keypoints": [
-        [x1, y1], [x2, y2], ..., [xn, yn]
-      ]
-    }
-    ```
-    Keypoints는 프레임별, 관절별 (x, y) 좌표 배열
+**입력 예시 (application/json)**
+```json
+{
+  "keypoints": [[x, y], [x, y], ...]  // (프레임별, 관절별)
+}
+```
+- 입력은 **프레임별/관절별 (x, y)좌표** 2차원 리스트
 
-- **응답**
-    ```json
-    {
-      "emotion": "Happy",
-      "confidence": 0.97
-    }
-    ```
+**응답 예시**
+```json
+{
+  "emotion": "Happy",
+  "confidence": 0.97
+}
+```
 
-#### 헬스 체크
+#### 서버 상태 체크
 ```
 GET /health
 ```
-- 서버 상태: `{"status":"ok"}`
+- 응답: `{"status":"ok"}`
 
 ---
 
 ## 🌐 프론트엔드
 
-- `frontend/` 폴더에 경량 웹 데모 페이지(`index.html`)가 포함되어 있어 입력 데이터를 직접 올리고 결과를 확인할 수 있습니다.
-- API 서버와 동일 도메인에서 제공하거나, `main.py` CORS 설정을 통해 외부 배포시에도 Ajax 요청 허용.
+- `frontend/` 폴더에 웹 데모(html) 포함.
+- API 서버와 도메인이 다르다면, FastAPI에서 CORS 허용 필요.
 
 ---
 
 ## 🧪 테스트
 
-- **pytest** 기반 자동화 테스트(엔드포인트/특징추출/모델로딩 리그레션)
-- 실행 방법:
-    ```bash
-    pytest tests/
-    ```
-- 전체 API 및 데이터 처리, 예외 상황 커버
+- Pytest 기반 자동 테스트:  
+  ```bash
+  pytest tests/
+  ```
+- API, 특징 추출, 모델로드 등 커버
 
 ---
 
 ## 🛠 개발 가이드
 
-- 한글 주석과 상세 설명으로 모든 핵심 로직에 가이드 포함
-- 특징 추출, API 처리, 모델 inference 모듈화를 명확히 분리
-- 모델 갱신·확장 시 `models/deployment/`와 `src/`만 교체로 확장 가능
-- 커스텀 데이터/모델 추가시 `models/research/`의 예시 코드 참고
+- **한글 주석 & 상세 설명**
+- 특징 추출, API, 모델 inference 등 명확 분리
+- 모델 업데이트 시 `models/deployment/`, 특징추출 로직은 `src/` 교체만으로 커버
+- 추가 연구/확장: `scripts/`, `models/research/` 예시 참고
 
 ---
 
 ## 🐞 문제 해결
 
-### LFS 파일 관련
-- 대용량 모델 파일(.pt, .h5, .joblib, .pkl 등) 업로드/다운로드는 반드시 Git LFS 명령어(`git lfs install`, `git lfs pull`, `git lfs track "*.확장자"`)를 사용하세요.
-- 웹 업로드 불가, 반드시 커맨드라인에서 처리해야 함
+- **LFS 파일:**  
+  대용량 파일(.pt, .h5, .joblib, .pkl 등) 은 반드시  
+  `git lfs install`, `git lfs pull`, `.gitattributes` 확인 필요
 
-### 실행 에러
-- 의존성 미설치: `pip install -r requirements.txt` 필수
-- 모델 파일 누락: `git lfs pull`로 모델 받아야 정상 동작
+- **실행 에러**  
+  - 패키지 미설치 → `pip install -r requirements.txt`
+  - 모델 파일 누락 → `git lfs pull`로 모델 다운로드
 
-### 기타 이슈
-- 최신 Python(3.10), Docker, 패키지 버전 권장
-- 상세 오류 메시지는 이슈 트래커에 등록해주시면 빠르게 응답드림
+- **버전/환경**  
+  - Python 3.10, Docker 등 최신 버전 권장
+  - 상세 오류는 [이슈 트래커](https://github.com/KimTaek-Su/gait-emotion-recognition/issues)에 등록
 
 ---
 
 ## 🤝 기여하기
 
 1. 저장소 Fork → 새 브랜치 생성
-2. 기능/수정 개발 및 테스트 코드 작성
-3. Pull Request 제출 (영어/한글 PR 모두 환영)
-4. 코드 리뷰를 통한 반영 및 병합
-5. 제안/문의/에러 발견 시 언제든 Issue 남겨주세요!
+2. 기능/수정 개발 및 테스트 코딩
+3. Pull Request 제출 (한글/영어 모두 환영)
+4. 코드 리뷰 및 병합
+5. 문의/제안/에러는 언제든 [이슈](https://github.com/KimTaek-Su/gait-emotion-recognition/issues) 사용!
 
 ---
 
 ## 📄 라이선스
 
-- 본 프로젝트는 MIT License를 따릅니다.  
-- 자유로운 사용·수정·배포가 가능하며, 상업적·비상업적 프로젝트에 모두 활용할 수 있습니다.
-- 자세한 라이선스 전문은 [LICENSE](./LICENSE) 파일 참조
+- 본 프로젝트는 MIT License를 따릅니다.
+- 자유로운 사용·수정·배포가 가능하며, 상업적·비상업적 모두 활용할 수 있습니다.
+- 라이선스 전문: [LICENSE](./LICENSE) 참조
 
 ---
 
