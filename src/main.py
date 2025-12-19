@@ -72,73 +72,109 @@ async def health():
 # ====== 5. 감정 예측 엔드포인트 ======
 @app.post("/predict_emotion")
 async def predict_emotion_endpoint(request: PredictionRequest):
-    # 입력 검증 및 파싱
+    # request: PredictionRequest (기존) 대신 raw dict를 받도록 변경하거나,
+    # 현재 Pydantic 모델을 유지하려면 request.dict()로 변환해 사용
+    body_dict = request.dict()  # 또는 request.__dict__ 형태
+
+    # features 생성 (통합 함수 사용)
     try:
-        kp_data = np.array(request.keypoints, dtype=float)  # shape: (frames, 3)
-        if kp_data.ndim != 2 or kp_data.shape[1] != 3:
-            raise ValueError("각 키포인트에 3개의 좌표[x, y, z]가 필요합니다.")
+        features = extract_hcf_features_from_request(body_dict)  # 14D 벡터 기대
     except Exception as e:
-        raise HTTPException(status_code=422, detail=f"입력 좌표 파싱 실패: {str(e)}")
+        raise HTTPException(status_code=422, detail=f"특징 추출 실패: {str(e)}")
+
+    # 이후 기존 로직: 모델 존재 확인, expected 비교 등
+    expected = getattr(fusion_model, "n_features_in_", None)
+    print("DEBUG: generated features len =", len(features), "features =", features)
+    print("DEBUG: model expected n_features_in_ =", expected)
+    if expected is not None and len(features) != expected:
+        raise HTTPException(status_code=422, detail=f"특징 차원 불일치: 생성된 features 길이={len(features)}인데 모델은 {expected}차원을 기대합니다.")
 
     # 특징벡터 추출 (여기서는 예시; 실제로는 원본 feature_extractor를 사용해야 함)
     def extract_hcf_features(kp_arr: np.ndarray) -> List[float]:
-        # ===== 실제 feature_extractor 통합 (대체 코드) =====
-        # 시도 1: src 패키지 구조일 때
-        try:
-            # 프로젝트 루트에서 uvicorn을 실행하면 'feature_extractor' 모듈로 import 가능할 수 있음
-            from feature_extractor import extract_features as repo_extract_features
-            print("[INIT] imported extract_features from feature_extractor")
-        except Exception:
-            try:
-                # 패키지화된 경우 (src.feature_extractor)
-                from src.feature_extractor import extract_features as repo_extract_features
-                print("[INIT] imported extract_features from src.feature_extractor")
-            except Exception as e:
-                repo_extract_features = None
-                print("[WARN] extract_features import failed:", repr(e))
-        # 실제 feature extraction 함수 호출
-        return extract_hcf_features_using_repo(kp_arr)
+        # ---------- feature_extractor 통합 래퍼 ----------
+        pass  # 실제 구현 필요
 
-def extract_hcf_features_using_repo(kp_arr: np.ndarray):
-    """
-    레포지토리의 extract_features를 안전하게 호출하고
-    반환값을 1차원 리스트로 정리해서 반환합니다.
-    """
-    if repo_extract_features is None:
-        raise RuntimeError("원본 feature extractor를 불러오지 못했습니다.")
-    # repo_extract_features의 시그니처는 레포지토리마다 다를 수 있음.
-    # scripts/gait_emotion_predct.py 에 따르면: extract_features(keypoints_seq, n_joints=...)
+    # src/feature_extractor.py 의 함수들을 안전히 불러와 사용합니다.
     try:
-        # n_joints 인자 필요 여부를 안전히 처리
-        n_joints = kp_arr.shape[1] if kp_arr.ndim == 2 else None
-        # 일부 구현은 (timesteps, features) 형태의 2D array를 반환할 수 있으므로 처리
-        if n_joints is not None:
-            feat = repo_extract_features(kp_arr, n_joints=n_joints)
-        else:
-            feat = repo_extract_features(kp_arr)
-    except TypeError:
-        # 함수가 n_joints 인자를 받지 않는 경우
-        feat = repo_extract_features(kp_arr)
+        # 같은 디렉터리(src)에서 실행되는 경우
+        from feature_extractor import extract_features_from_skeleton, extract_features
+        print("[INIT] imported extract_features_from_skeleton, extract_features from feature_extractor")
+    except Exception:
+        try:
+            # 패키지화된 경우
+            from src.feature_extractor import extract_features_from_skeleton, extract_features
+            print("[INIT] imported from src.feature_extractor")
+        except Exception as e:
+            extract_features_from_skeleton = None
+            extract_features = None
+            print("[WARN] feature_extractor import failed:", repr(e))
 
-    # 반환값 정리: numpy array 또는 list 또는 2D array 가능
-    if hasattr(feat, "tolist"):
-        feat_list = feat.tolist()
-    else:
-        feat_list = list(feat)
+    def convert_keypoints_to_skeleton_data(keypoints: List[List[float]], n_joints: Optional[int] = None) -> List[str]:
+        """
+        keypoints가 다음 두 가지 중 하나일 때 처리:
+        1) keypoints: list of dicts per frame (handled elsewhere)
+        2) keypoints: flat list of [x,y,z] entries length = n_frames * n_joints
+        이 함수는 (n_frames, n_joints, 3) 형태로 재구성한 뒤 "x,y,z" 문자열 리스트로 반환합니다.
+        """
+        arr = np.array(keypoints, dtype=float)
+        if arr.ndim != 2 or arr.shape[1] != 3:
+            raise ValueError("keypoints는 각 항목이 [x,y,z] 형태의 2차원 배열이어야 합니다.")
+        total_points = arr.shape[0]
 
-    # 만약 2D (timesteps, feat_dim) 형태라면 평균/flatten 등 모델이 기대하는 형태로 변환
-    # README/docs에 따르면 모델은 14D HCF 벡터(1차원)를 기대하므로 2D이면 평균을 취함
-    if isinstance(feat_list, list) and len(feat_list) > 0 and isinstance(feat_list[0], list):
-        # 예: 시계열(timesteps, 14) -> 각 컬럼별 평균으로 1D 벡터 생성
-        arr = np.array(feat_list, dtype=float)
-        feat_1d = np.mean(arr, axis=0).tolist()
-    else:
-        feat_1d = [float(x) for x in feat_list]
+        # n_joints가 주어지지 않으면 README/docs의 기본 관절 수(예: 13) 사용
+        if n_joints is None:
+            # feature_extractor.extract_features uses 13 joint_names in its extract_features wrapper
+            n_joints = 13
 
-    return feat_1d
+        if total_points % n_joints != 0:
+            raise ValueError(f"keypoints 길이({total_points})가 n_joints({n_joints})로 나누어떨어지지 않습니다. 프레임 재구성이 불가합니다.")
 
-    features = features = extract_hcf_features_using_repo(kp_data)
+        n_frames = total_points // n_joints
+        reshaped = arr.reshape(n_frames, n_joints, 3)  # (n_frames, n_joints, 3)
 
+        # flatten to list of "x,y,z" strings in frame-major, joint-major order
+        skeleton_data = []
+        for f in range(n_frames):
+            for j in range(n_joints):
+                x, y, z = reshaped[f, j]
+                skeleton_data.append(f"{float(x)},{float(y)},{float(z)}")
+        return skeleton_data
+
+    def extract_hcf_features_from_request(request_body: dict) -> List[float]:
+        """
+        request_body: dict that may contain:
+          - 'skeleton_data': List[str]  (preferred)
+          - 'keypoints': List[List[float]]  (flat list of [x,y,z] entries)
+          - optionally 'n_joints': int
+        Returns: 1D list of features (length 14 expected)
+        """
+        if extract_features_from_skeleton is None and extract_features is None:
+            raise RuntimeError("feature_extractor 모듈을 불러오지 못했습니다.")
+
+        # 우선 skeleton_data 우선 처리
+        if "skeleton_data" in request_body and request_body["skeleton_data"]:
+            skeleton_data = request_body["skeleton_data"]
+            n_joints = request_body.get("n_joints", None)
+            # call extract_features_from_skeleton
+            feat = extract_features_from_skeleton(skeleton_data, n_joints=n_joints if n_joints is not None else 17)
+            return feat.tolist() if hasattr(feat, "tolist") else list(feat)
+
+        # 다음으로 keypoints(flat [x,y,z] entries) 처리
+        if "keypoints" in request_body and request_body["keypoints"]:
+            keypoints = request_body["keypoints"]
+            n_joints = request_body.get("n_joints", None)
+            # try to convert to skeleton_data
+            skeleton_data = convert_keypoints_to_skeleton_data(keypoints, n_joints=n_joints)
+            feat = extract_features_from_skeleton(skeleton_data, n_joints=(n_joints if n_joints is not None else 13))
+            return feat.tolist() if hasattr(feat, "tolist") else list(feat)
+
+        # 마지막으로 dict-per-frame 형식(keypoints as list of dicts) 처리 (extract_features wrapper)
+        if "keypoints_dicts" in request_body and request_body["keypoints_dicts"]:
+            keypoints_dicts = request_body["keypoints_dicts"]
+            feat = extract_features(keypoints_dicts)
+            return feat.tolist() if hasattr(feat, "tolist") else list(feat)
+
+        raise ValueError("요청에 'skeleton_data' 또는 'keypoints' (또는 'keypoints_dicts')가 필요합니다.")
 
     # 임시 패딩: 모델이 기대하는 차원까지 0으로 채움 (디버그/확인용)
     expected = getattr(fusion_model, "n_features_in_", None)
