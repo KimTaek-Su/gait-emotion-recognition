@@ -1,10 +1,53 @@
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, HTTPException, Response, Body
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, validator
 from typing import List, Optional
 import numpy as np
 import joblib
 import os
+
+# === 실제 구현으로 대체! ===
+def convert_keypoints_to_skeleton_data(keypoints: List[List[float]], n_joints: Optional[int] = None) -> List[str]:
+    arr = np.array(keypoints, dtype=float)
+    if arr.ndim != 2 or arr.shape[1] != 3:
+        raise ValueError("keypoints는 [ [x,y,z], ... ] 2차원 배열이어야 합니다.")
+    total_points = arr.shape[0]
+    if n_joints is None:
+        n_joints = 13  # 기본값
+    if total_points % n_joints != 0:
+        raise ValueError(f"keypoints 길이({total_points})가 n_joints({n_joints})로 나누어떨어지지 않습니다.")
+    n_frames = total_points // n_joints
+    reshaped = arr.reshape(n_frames, n_joints, 3)
+    skeleton_data = [f"{float(x)},{float(y)},{float(z)}"
+                     for f in range(n_frames) for (x, y, z) in reshaped[f]]
+    return skeleton_data
+
+def extract_hcf_features_from_request(request_body: dict) -> List[float]:
+    if extract_features_from_skeleton is None and extract_features is None:
+        raise RuntimeError("feature_extractor 모듈을 불러오지 못했습니다.")
+
+    # 우선 skeleton_data 우선
+    if "skeleton_data" in request_body and request_body["skeleton_data"]:
+        skeleton_data = request_body["skeleton_data"]
+        n_joints = request_body.get("n_joints", 17)
+        feat = extract_features_from_skeleton(skeleton_data, n_joints=n_joints)
+        return feat.tolist() if hasattr(feat, "tolist") else list(feat)
+
+    # [ [x, y, z], ... ] 구조
+    if "keypoints" in request_body and request_body["keypoints"]:
+        keypoints = request_body["keypoints"]
+        n_joints = request_body.get("n_joints", 13)
+        skeleton_data = convert_keypoints_to_skeleton_data(keypoints, n_joints=n_joints)
+        feat = extract_features_from_skeleton(skeleton_data, n_joints=n_joints)
+        return feat.tolist() if hasattr(feat, "tolist") else list(feat)
+
+    # 프레임별 dict 입력(보류)
+    if "keypoints_dicts" in request_body and request_body["keypoints_dicts"]:
+        keypoints_dicts = request_body["keypoints_dicts"]
+        feat = extract_features(keypoints_dicts)
+        return feat.tolist() if hasattr(feat, "tolist") else list(feat)
+
+    raise ValueError("'skeleton_data' 또는 'keypoints' 필드가 필요합니다.")
 
 # ===============================
 # 1. Pydantic 모델 정의 (keypoints only; 실제 입력은 비공식적으로 더 지원)
