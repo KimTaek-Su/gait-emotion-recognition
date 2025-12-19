@@ -1,6 +1,6 @@
 /**
- * 걸음걸이 감정 인식 프론트엔드 JavaScript
- * (백엔드 요구에 맞게 keypoints 구조 자동 변환 지원)
+ * 걸음걸이 감정 인식 프론트엔드 JavaScript (최신 개선 버전)
+ * 다양한 keypoints 구조를 서버 요구대로 자동 변환 + 예외·안내 강화
  */
 
 const API_URL = 'http://localhost:8000';
@@ -11,13 +11,12 @@ const MEDIAPIPE_TO_17_JOINTS = [
 
 let skeletonDataBuffer = [];
 const MIN_FRAMES = 30;
-
 let pose = null;
 let camera = null;
 let isWebcamActive = false;
 
 /**
- * 샘플 키포인트 데이터 (딕셔너리 배열)
+ * 사용자 샘플 데이터: 최소 2프레임, 관절별 [x, y]만 있어도 자동 보완
  */
 function loadSampleData() {
     const sampleData = [
@@ -56,32 +55,29 @@ function loadSampleData() {
 }
 
 /**
- * 다양한 입력 형식(keypoints: 딕셔너리배열 또는 좌표배열) → 서버 요구 [ [x, y, z] ... ] 형태로 변환
- * - (딕셔너리 값이 [x, y]처럼 z없어도 지원)
+ * 입력 keypoints 구조(딕셔너리배열, [x, y], [x, y, z]) → [[x,y,z], ...]로 일반화 변환
  */
 function parseKeypointsForServer(origKeypoints) {
+    // 1. [{joint:[x,y]}...] → [[x,y,z], ...] : frame 단위로 joint 하나씩 평탄화
     if (
         Array.isArray(origKeypoints) &&
         typeof origKeypoints[0] === "object" &&
         origKeypoints[0] !== null &&
         !Array.isArray(origKeypoints[0])
     ) {
-        // [ {nose: [...], ...}, ... ] 형태
         let out = [];
         for (const frame of origKeypoints) {
             for (const key in frame) {
                 let kp = frame[key];
-                // [x, y] → [x, y, 0.0] 보정 (백엔드는 z포함 3차원 좌표를 기대할 수도 있음)
-                if (Array.isArray(kp) && kp.length === 2) {
-                    out.push([kp[0], kp[1], 0.0]);
-                } else if (Array.isArray(kp) && kp.length === 3) {
-                    out.push(kp);
+                if (Array.isArray(kp)) {
+                    if (kp.length === 2) out.push([kp[0], kp[1], 0.0]);
+                    else if (kp.length === 3) out.push(kp);
                 }
             }
         }
         return out;
     }
-    // 한 번 더: 좌표배열이고 [x, y]만 있는 경우, 전부 z = 0.0을 추가해줌
+    // 2. [[x, y], ... ] → [[x, y, 0.0], ... ]
     if (
         Array.isArray(origKeypoints) &&
         Array.isArray(origKeypoints[0]) &&
@@ -89,13 +85,19 @@ function parseKeypointsForServer(origKeypoints) {
     ) {
         return origKeypoints.map(kp => [kp[0], kp[1], 0.0]);
     }
-    // [ [x, y, z], ... ] 혹은 비슷한 형태면 그대로 반환
-    return origKeypoints;
+    // 3. 이미 [[x,y,z], ...] 인 경우 → pass
+    if (
+        Array.isArray(origKeypoints) &&
+        Array.isArray(origKeypoints[0]) &&
+        origKeypoints[0].length === 3
+    ) {
+        return origKeypoints;
+    }
+    // 4. 오류 (지원X)
+    return null;
 }
 
-/**
- * 감정 예측 결과 출력 등(기존 코드 동일)
- */
+// 감정 결과/에러 안내 등 출력 유틸리티
 function getEmotionIcon(emotion) {
     const icons = { happy:'😊', sad:'😢', fear:'😨', disgust:'🤢', angry:'😠', neutral:'😐' };
     return icons[emotion?.toLowerCase()] || '😐';
@@ -157,7 +159,7 @@ function showLoading() {
 }
 
 /**
- * 감정 예측 API 호출 (textarea)
+ * 입력 검증/변환 및 감정 예측 API 호출 (textarea)
  */
 async function predictEmotion() {
     const input = document.getElementById('keypointsInput').value.trim();
@@ -169,11 +171,11 @@ async function predictEmotion() {
     try {
         keypoints = JSON.parse(input);
     } catch (e) {
-        displayError('올바른 JSON 형식이 아닙니다. 형식을 확인해주세요.'); return;
+        displayError('올바른 JSON 형식이 아닙니다. 샘플 버튼을 눌러 예시를 참고하세요.'); return;
     }
-    keypoints = parseKeypointsForServer(keypoints);
-    if (!Array.isArray(keypoints) || keypoints.length < 2) {
-        displayError('최소 2개 이상의 좌표 배열이 필요합니다.'); return;
+    const parsedKeypoints = parseKeypointsForServer(keypoints);
+    if (!Array.isArray(parsedKeypoints) || parsedKeypoints.length < 2) {
+        displayError('최소 2프레임 이상의 데이터가 필요합니다. 샘플 데이터를 확인하세요.'); return;
     }
     predictBtn.disabled = true;
     showLoading();
@@ -181,11 +183,17 @@ async function predictEmotion() {
         const response = await fetch(`${API_URL}/predict_emotion`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ keypoints })
+            body: JSON.stringify({ keypoints: parsedKeypoints })
         });
         if (!response.ok) {
             const errorData = await response.json();
-            throw new Error(errorData.detail || '서버 오류가 발생했습니다.');
+            let msg = '서버 오류가 발생했습니다.';
+            if (errorData && errorData.detail) {
+                msg = typeof errorData.detail === 'string'
+                    ? errorData.detail
+                    : JSON.stringify(errorData.detail);
+            }
+            throw new Error(msg);
         }
         displayResult(await response.json());
     } catch (error) {
@@ -204,6 +212,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 });
+
 async function testConnection() {
     try {
         const response = await fetch(`${API_URL}/health`);
@@ -220,7 +229,7 @@ async function testConnection() {
 testConnection();
 
 /**
- * skeleton_data 변환 및 웹캠 지원 부분(원본 유지)
+ * skeleton_data 변환 및 웹캠 분석 루틴(원본 유지)
  */
 function convertToServerFormat(poseLandmarks) {
     if (!poseLandmarks || !Array.isArray(poseLandmarks)) {
