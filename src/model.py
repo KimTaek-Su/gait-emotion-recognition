@@ -88,6 +88,12 @@ async def predict_emotion_endpoint(request: PredictionRequest):
 
     features = extract_hcf_features(kp_data)  # 현재 예시로 6개 생성
 
+    # 임시 패딩: 모델이 기대하는 차원까지 0으로 채움 (디버그/확인용)
+    expected = getattr(fusion_model, "n_features_in_", None)
+    if expected is not None and len(features) < expected:
+        print(f"[TEMP PAD] features len {len(features)} -> pad to {expected}")
+        features = features + [0.0] * (expected - len(features))
+
     # 모델 존재 확인
     if fusion_model is None:
         raise HTTPException(status_code=503, detail="모델 파일 로드 실패. 서버 점검 필요.")
