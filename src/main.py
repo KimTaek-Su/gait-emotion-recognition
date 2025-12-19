@@ -27,7 +27,7 @@ app = FastAPI(
 
 # ====== 3. 모델 로드 (Bi-LSTM_HCF_Fusion_final_results.pkl) ======
 try:
-    fusion_model = joblib.load('./models/deployment/Bi-LSTM_HCF_Fusion_final_results.pkl')
+    fusion_model = joblib.load('./models/deployment/gait_emotion_api_model.joblib')
 except Exception as e:
     fusion_model = None
     print(f"[!] 모델 로드 실패: {e}")
