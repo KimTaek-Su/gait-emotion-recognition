@@ -13,7 +13,7 @@ def convert_keypoints_to_skeleton_data(keypoints: List[List[float]], n_joints: O
         raise ValueError("keypoints는 [ [x,y,z], ... ] 2차원 배열이어야 합니다.")
     total_points = arr.shape[0]
     if n_joints is None:
-        n_joints = 13  # 기본값
+        n_joints = 17  # 13에서 17로 수정하거나, 호출할 때 17을 넘겨줘야 함
     if total_points % n_joints != 0:
         raise ValueError(f"keypoints 길이({total_points})가 n_joints({n_joints})로 나누어떨어지지 않습니다.")
     n_frames = total_points // n_joints
@@ -193,6 +193,13 @@ async def predict_emotion_endpoint(request: dict):
     # 피쳐 추출
     try:
         features = extract_hcf_features_from_request(body_dict)
+        # --- 추가된 부분 시작 ---
+        expected = getattr(fusion_model, "n_features_in_", 20)
+        if len(features) < expected:
+            # 부족한 개수만큼 0.0으로 채워줌(14개 → 20개)
+            padding_size = expected - len(features)
+            features.extend([0.0] * padding_size)
+        # --- 추가된 부분 끝 ---
     except Exception as e:
         raise HTTPException(status_code=422, detail=f"특징 추출 실패: {e}")
 

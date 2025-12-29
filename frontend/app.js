@@ -231,6 +231,10 @@ testConnection();
 /**
  * skeleton_data 변환 및 웹캠 분석 루틴(원본 유지)
  */
+
+// 17개만 골라내지 말고 전체를 보내도록 수정(테스트용)
+const ALL_33_JOINTS = Array.from({length:33}, (_, i) => i)
+
 function convertToServerFormat(poseLandmarks) {
     if (!poseLandmarks || !Array.isArray(poseLandmarks)) {
         console.warn('Invalid poseLandmarks:', poseLandmarks); return null;
@@ -239,7 +243,7 @@ function convertToServerFormat(poseLandmarks) {
         console.warn(`Not enough landmarks. Expected 33, got ${poseLandmarks.length}`); return null;
     }
     const skeleton_data = [];
-    for (const mpIndex of MEDIAPIPE_TO_17_JOINTS) {
+    for (const mpIndex of ALL_33_JOINTS) { // 17개 대신 33개 사용
         const landmark = poseLandmarks[mpIndex];
         if (landmark && typeof landmark.x === 'number' && typeof landmark.y === 'number' && typeof landmark.z === 'number') {
             skeleton_data.push(`${landmark.x},${landmark.y},${landmark.z}`);
@@ -331,13 +335,25 @@ function onPoseResults(results) {
     }
 }
 async function analyzeFromWebcam() {
-    if (skeletonDataBuffer.length < MIN_FRAMES) {
-        displayError(`최소 ${MIN_FRAMES}개 프레임이 필요합니다. 현재: ${skeletonDataBuffer.length}개`); return;
+    // 1. 버퍼에 쌓인 모든 관절 데이터를 하나로 펼침
+    let allSkeletonData = skeletonDataBuffer.flat();
+
+    // 2. [중요] 17개 관절 데이터가 한 세트이므로, 총 개수가 17의 배수가 되도록 뒤를 자름
+    const numJoints = 17;
+    const remainder = allSkeletonData.length % numJoints;
+    if (remainder !== 0) {
+        console.warn('데이터 불일치 발생: ${remainder}개의 관절 데이터를 제외합니다.');
+        allSkeletonData = allSkeletonData.slice(0, allSkeletonData.length - remainder);
     }
-    const allSkeletonData = skeletonDataBuffer.flat();
-    console.log(`분석 시작: ${skeletonDataBuffer.length}개 프레임, ${allSkeletonData.length}개 좌표`);
+
+    // 3. 서버가 원하는 ["x,y,z", "x,y,z"] 형식으로 변환
+    const formattedData = allSkeletonData.map(joint => {
+        return Array.isArray(joint) ? joint.join(',') : joint;
+    });
+    
+
     try {
-        showLoading();
+        // Use the collected skeleton data for analysis
         const response = await fetch(`${API_URL}/predict_emotion`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
