@@ -15,11 +15,13 @@
 ## 📖 목차
 
 - [프로젝트 소개](#-프로젝트-소개)
+- [연구 정리 한눈에 보기](#-연구-정리-한눈에-보기)
 - [주요 특징](#-주요-특징)
 - [공익적 활용](#-공익적-활용)
 - [기술 스택](#-기술-스택)
 - [성능 지표](#-성능-지표)
 - [방법론: 14가지 수제 특징 (HCF) + LSTM 시계열](#-방법론-hcf14--bi-lstm-시계열-융합)
+- [문서 안내](#-문서-안내)
 - [시작하기](#-시작하기)
   - [Docker로 실행 (권장)](#1-docker로-실행-권장)
   - [로컬 환경에서 실행](#2-로컬-환경에서-실행)
@@ -46,6 +48,31 @@
 2. **특징 추출:** 걸음걸이의 **14가지 수제 특징(HCF)** 추출 및 프레임 시계열
 3. **감정 예측:** **Bi-LSTM_HCF_Fusion** 딥러닝 모델로 감정 분류 (최종 배포 모델)
 4. **결과 반환:** 예측된 감정과 신뢰도를 JSON 형태로 반환
+
+---
+
+## 🧭 연구 정리 한눈에 보기
+
+| 항목 | 핵심 내용 |
+|:--|:--|
+| 연구 질문 | **걸음걸이만으로도 사람의 정서 상태를 안정적으로 구분할 수 있는가?** |
+| 입력 표현 | 신체 키포인트 시계열(`skeleton_data`)과 여기서 파생한 **14개 HCF 특징** |
+| 모델 전략 | **Bi-LSTM**으로 시계열 패턴을 읽고, **HCF 특징**과 결합하는 Fusion 구조 사용 |
+| 예측 대상 | Happy, Sad, Fear, Disgust, Angry, Neutral |
+| 현재 배포 기준 | `models/deployment/`의 배포용 모델을 API에서 로드해 추론 |
+
+### 연구 관점에서 보면
+
+1. **문제 정의**  
+   비언어적 행동 신호 중 하나인 걸음걸이에서 정서적 단서를 읽어내는 것이 목표입니다.
+2. **표현 학습 + 해석 가능성의 균형**  
+   Raw 시계열만 쓰지 않고, 속도·가속도·자세 같은 **해석 가능한 특징(HCF)** 을 함께 사용합니다.
+3. **실험 자산 분리**  
+   - `models/research/`: 실험 결과 및 연구 자산  
+   - `models/deployment/`: 실제 서비스 배포 기준 모델  
+   - `src/`: API 및 특징 추출/추론 코드
+4. **재정리 시작점**  
+   연구 배경, 방법론, 실험 비교, 향후 과제를 한 문서로 다시 보고 싶다면 `docs/RESEARCH_OVERVIEW.md`부터 보는 것을 권장합니다.
 
 ---
 
@@ -116,7 +143,7 @@
 | Random Forest            | 14개 HCF    | 72.81%   | 0.072 ms   | 보조/비교모델    |
 | SVM                      | 14개 HCF    | 34.42%   | 약 15ms    | 전통 ML          |
 
-> **현재 `models/deployment/Bi-LSTM_HCF_Fusion_final_results.pkl`이 서버에 배포되며 모든 감정 예측에 실사용됩니다.**
+> **현재 API는 `models/deployment/gait_emotion_api_model.joblib`를 로드해 감정 예측에 사용합니다.**
 
 ---
 
@@ -131,6 +158,13 @@
 
 > 구현 상세: `src/feature_extractor.py`, `src/model.py` 참고  
 > 딥러닝 아키텍처/재현: `models/research/` 참조
+
+---
+
+## 📚 문서 안내
+
+- [`docs/RESEARCH_OVERVIEW.md`](./docs/RESEARCH_OVERVIEW.md): 연구 배경, 문제 정의, 방법론, 실험 관점 정리
+- [`docs/API_GUIDE.md`](./docs/API_GUIDE.md): API 요청/응답과 운영 관점 사용 가이드
 
 ---
 
@@ -166,7 +200,7 @@ docker-compose up --build
 # Swagger 테스트: http://localhost:8000/docs
 # API 기본주소: http://localhost:8000
 ```
-> **참고:** 배포용 모델(`models/deployment/Bi-LSTM_HCF_Fusion_final_results.pkl`)이 자동 로드됩니다.
+> **참고:** 배포용 모델(`models/deployment/gait_emotion_api_model.joblib`)이 자동 로드됩니다.
 
 ---
 
@@ -192,7 +226,7 @@ git lfs install
 git lfs pull
 
 # 5. 서버 실행
-python main.py
+uvicorn src.main:app --reload
 ```
 
 ---
@@ -204,18 +238,21 @@ gait-emotion-recognition/
 ├── Dockerfile
 ├── docker-compose.yml
 ├── README.md
+├── docs/
+│   ├── API_GUIDE.md
+│   └── RESEARCH_OVERVIEW.md
 ├── requirements.txt
-├── main.py
 ├── src/
-│   ├── feature_extractor.py         # 14가지 특징(HCF) 추출 및 시계열/전처리
-│   └── model.py                    # Bi-LSTM_HCF_Fusion 모델 로드/추론
+│   ├── main.py                     # FastAPI 서버 진입점
+│   ├── feature_extractor.py        # 14가지 특징(HCF) 추출 및 시계열/전처리
+│   └── model.py                    # 모델 로드/추론 로직
 ├── scripts/
 │   ├── gait_emotion_predict.py      # 예시: 특징 추출/감정예측 유틸
 │   ├── extract_gait_keypoints.py    # 예시: 영상 → 키포인트 변환
 │   └── ...
 ├── models/
 │   ├── deployment/
-│   │   └── Bi-LSTM_HCF_Fusion_final_results.pkl  # 최종 배포 Bi-LSTM Fusion 모델 (LFS 관리)
+│   │   └── gait_emotion_api_model.joblib         # 현재 API가 로드하는 배포용 모델
 │   └── research/
 │       ├── ... (실험용 모델, 로그 등)
 ├── frontend/
@@ -226,10 +263,10 @@ gait-emotion-recognition/
 │   └── ...
 └── .gitattributes
 ```
-- **main.py**: FastAPI 서버 진입점 (Bi-LSTM 모델 API)
+- **src/main.py**: FastAPI 서버 진입점 (걸음걸이 감정 인식 API)
 - **src/**: 특징 추출/모델 관리 등 내부 로직
 - **scripts/**: 분석/추출/개별 실행 테스트 스크립트(별도 실행)
-- **models/deployment/**: 배포용 Bi-LSTM Fusion 모델 (LFS 대상)
+- **models/deployment/**: 배포용 모델 파일 저장 위치
 - **frontend/**: 웹 데모
 - **tests/**: 자동화 테스트
 - **.gitattributes**: LFS 설정
@@ -246,7 +283,7 @@ gait-emotion-recognition/
 
 #### 감정 예측
 ```
-POST /predict-emotion
+POST /predict_emotion
 ```
 
 **입력 예시 (application/json)**
@@ -279,7 +316,7 @@ POST /predict-emotion
 ```
 GET /health
 ```
-응답: `{"status":"ok"}`
+응답: `{"status":"healthy","service":"gait-emotion-recognition","version":"2.0.0"}`
 
 ---
 
