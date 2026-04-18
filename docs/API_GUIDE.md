@@ -5,7 +5,7 @@
 ## 📡 기본 정보
 
 - **Base URL**: `http://localhost:8000`
-- **API 버전**: 1.0.0
+- **API 버전**: 2.0.0
 - **Content-Type**: `application/json`
 
 ## 🔗 엔드포인트
@@ -22,7 +22,7 @@ GET /
 ```json
 {
   "message": "걸음걸이 감정 인식 API에 오신 것을 환영합니다!",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "docs": "/docs"
 }
 ```
@@ -42,7 +42,7 @@ GET /health
 {
   "status": "healthy",
   "service": "gait-emotion-recognition",
-  "version": "1.0.0"
+  "version": "2.0.0"
 }
 ```
 

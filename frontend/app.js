@@ -5,10 +5,6 @@
 
 const API_URL = 'http://localhost:8000';
 
-const MEDIAPIPE_TO_17_JOINTS = [
-    0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28, 5, 2, 7, 8
-];
-
 let skeletonDataBuffer = [];
 const MIN_FRAMES = 30;
 let pose = null;
@@ -232,19 +228,20 @@ testConnection();
  * skeleton_data 변환 및 웹캠 분석 루틴(원본 유지)
  */
 
-// 17개만 골라내지 말고 전체를 보내도록 수정(테스트용)
-const ALL_33_JOINTS = Array.from({length:33}, (_, i) => i)
+const N_JOINTS = 33;
 
 function convertToServerFormat(poseLandmarks) {
     if (!poseLandmarks || !Array.isArray(poseLandmarks)) {
-        console.warn('Invalid poseLandmarks:', poseLandmarks); return null;
+        console.warn('Invalid poseLandmarks:', poseLandmarks);
+        return null;
     }
-    if (poseLandmarks.length < 33) {
-        console.warn(`Not enough landmarks. Expected 33, got ${poseLandmarks.length}`); return null;
+    if (poseLandmarks.length < N_JOINTS) {
+        console.warn(`Not enough landmarks. Expected ${N_JOINTS}, got ${poseLandmarks.length}`);
+        return null;
     }
     const skeleton_data = [];
-    for (const mpIndex of ALL_33_JOINTS) { // 17개 대신 33개 사용
-        const landmark = poseLandmarks[mpIndex];
+    for (let i = 0; i < N_JOINTS; i++) {
+        const landmark = poseLandmarks[i];
         if (landmark && typeof landmark.x === 'number' && typeof landmark.y === 'number' && typeof landmark.z === 'number') {
             skeleton_data.push(`${landmark.x},${landmark.y},${landmark.z}`);
         } else {
@@ -335,29 +332,23 @@ function onPoseResults(results) {
     }
 }
 async function analyzeFromWebcam() {
-    // 1. 버퍼에 쌓인 모든 관절 데이터를 하나로 펼침
+    // 버퍼에 쌓인 모든 관절 데이터를 하나로 펼침
     let allSkeletonData = skeletonDataBuffer.flat();
 
-    // 2. [중요] 17개 관절 데이터가 한 세트이므로, 총 개수가 17의 배수가 되도록 뒤를 자름
-    const numJoints = 17;
-    const remainder = allSkeletonData.length % numJoints;
+    // 관절 수에 맞춰 배수가 되도록 뒤를 자름
+    const remainder = allSkeletonData.length % N_JOINTS;
     if (remainder !== 0) {
-        console.warn('데이터 불일치 발생: ${remainder}개의 관절 데이터를 제외합니다.');
+        console.warn(`데이터 불일치: ${remainder}개의 관절 데이터를 제외합니다.`);
         allSkeletonData = allSkeletonData.slice(0, allSkeletonData.length - remainder);
     }
 
-    // 3. 서버가 원하는 ["x,y,z", "x,y,z"] 형식으로 변환
-    const formattedData = allSkeletonData.map(joint => {
-        return Array.isArray(joint) ? joint.join(',') : joint;
-    });
-    
+    showLoading();
 
     try {
-        // Use the collected skeleton data for analysis
         const response = await fetch(`${API_URL}/predict_emotion`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ skeleton_data: allSkeletonData, n_joints: 17 })
+            body: JSON.stringify({ skeleton_data: allSkeletonData, n_joints: N_JOINTS })
         });
         if (!response.ok) {
             const errorData = await response.json();
