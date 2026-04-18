@@ -67,7 +67,7 @@ def convert_keypoints_to_skeleton_data(
         raise ValueError("keypoints는 [[x,y,z], ...] 2차원 배열이어야 합니다.")
     total_points = arr.shape[0]
     if n_joints is None:
-        n_joints = 13
+        n_joints = 13  # 딕셔너리 형식 기준 관절 수 (nose~ankle 13개)
     if total_points % n_joints != 0:
         raise ValueError(
             f"keypoints 길이({total_points})가 n_joints({n_joints})로 나누어떨어지지 않습니다."

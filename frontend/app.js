@@ -228,6 +228,7 @@ testConnection();
  * skeleton_data 변환 및 웹캠 분석 루틴(원본 유지)
  */
 
+// MediaPipe Pose 전체 랜드마크 수 (33개 관절)
 const N_JOINTS = 33;
 
 function convertToServerFormat(poseLandmarks) {

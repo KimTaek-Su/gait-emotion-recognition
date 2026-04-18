@@ -119,6 +119,8 @@ def predict_local(keypoints_seq: np.ndarray) -> dict:
     print(f"추출된 특징 벡터 ({len(features)}개): {features}")
 
     # 간단한 규칙 기반 예측 (모델 없이)
+    # 규칙 기반 예측: 평균 속도(features[0])를 기준으로 감정 추정
+    # 0.05 이상: 빠른 걸음 → 행복, 0.01 이하: 느린 걸음 → 슬픔, 그 외: 중립
     avg_speed = features[0]
     if avg_speed > 0.05:
         emotion = "happy"
