@@ -1,7 +1,7 @@
 # 🚶 gait-emotion-recognition 실행 가이드 (검증 기반)
 
-이 문서는 **실제 저장소 상태를 점검하고 직접 실행/테스트한 결과**를 바탕으로 작성되었습니다.
-요약하면, 이 저장소는 FastAPI 기반 감정 예측 API와 브라우저 데모를 포함하며, 기본 실행 경로는 `src/main.py`입니다.
+이 문서는 **실제 저장소 상태를 점검하고 실행 경로를 확인한 뒤, 현재 코드 기준으로 정리한 실행 가이드**입니다.
+요약하면, 이 저장소의 **실제 백엔드 실행 엔트리포인트는 `src/main.py`**이며, 핵심 검증 대상도 이 경로를 기준으로 설명합니다.
 
 ---
 
@@ -12,8 +12,8 @@
 ```text
 gait-emotion-recognition/
 ├── src/
-│   ├── main.py                # 실제 API 엔트리포인트 (검증됨)
-│   ├── feature_extractor.py   # skeleton_data → 14개 특징 추출 로직 (검증됨)
+│   ├── main.py                # 실제 API 엔트리포인트 (주 실행 경로)
+│   ├── feature_extractor.py   # skeleton_data → 14개 특징 추출 로직
 │   └── model.py               # 구버전/실험 성격 API 코드 (현재 실행 경로 아님)
 ├── models/
 │   ├── deployment/
@@ -35,11 +35,32 @@ gait-emotion-recognition/
 └── docker-compose.yml
 ```
 
+### 구조를 어떻게 읽으면 되는가
+
+이 저장소는 크게 4개 층으로 보면 이해가 쉽습니다.
+
+1. **API 서비스 층**
+   - `src/main.py`
+   - FastAPI 앱 생성, 모델 로드, `/health`, `/predict_emotion` 제공
+
+2. **특징 추출 층**
+   - `src/feature_extractor.py`
+   - 입력 스켈레톤 데이터를 14개 특징으로 변환
+
+3. **모델 자산 층**
+   - `models/deployment/gait_emotion_api_model.joblib`
+   - 서버가 시작될 때 로드되는 실제 배포 모델
+
+4. **사용/데모 층**
+   - `frontend/`: 브라우저에서 API를 호출하는 정적 데모
+   - `tests/`: 최소 API/특징 변환 검증
+   - `scripts/`: 실험/수동 작업용 스크립트
+
 ---
 
 ## 2) 현재 구현된 기능과 역할
 
-### ✅ 구현/동작 확인된 핵심
+### ✅ 구현/핵심 경로로 확인되는 기능
 
 1. **헬스체크 API**: `GET /health`
 2. **감정 예측 API**: `POST /predict_emotion`
@@ -50,63 +71,79 @@ gait-emotion-recognition/
    - 모델 입력 차원(`n_features_in_`)과 다르면 `src/main.py`에서 0 패딩
 4. **배포 모델 로딩**
    - 경로: `models/deployment/gait_emotion_api_model.joblib`
+5. **브라우저 데모**
+   - `frontend/index.html` + `frontend/app.js`
+   - 텍스트 입력 기반 API 테스트
+   - 웹캠 기반 실시간 수집/전송 UI
 
 ### ⚠️ 참고(핵심 실행 경로 외)
 
 - `src/model.py`는 현재 기본 실행 문맥(`uvicorn src.main:app`)에서 사용되지 않습니다.
-- `scripts/`의 스크립트는 실험/수동 작업 성격이며, 하드코딩 경로/입력 전제가 있어 바로 재현 가능한 파이프라인으로 검증하지 않았습니다.
+- `src/model.py`에는 또 다른 FastAPI 앱과 예시성 특징 추출 코드가 있으나, **현재 저장소의 주 실행 경로로 보면 안 됩니다.**
+- `scripts/`의 스크립트는 실험/수동 작업 성격이며, 하드코딩 경로/입력 전제가 있어 README의 핵심 실행 검증 범위에 포함하지 않습니다.
 
 ---
 
 ## 3) 실행 가능 여부 검증 결과
 
-아래 항목은 실제로 이 저장소에서 실행 확인했습니다.
+이 저장소를 볼 때 가장 중요한 기준은 **무엇이 실제로 확인되었고, 무엇이 아직 확인되지 않았는가**입니다.
 
-### ✅ 검증 완료
+### ✅ 확인된 실행 경로
 
-- 의존성 설치 (`pip install -r requirements.txt`)
-- 테스트 실행 (`python -m pytest -q`) → **13 passed**
-- API 서버 기동 (`uvicorn src.main:app --host 127.0.0.1 --port 8000`)
-- 수동 API 호출
-  - `GET /health` 정상
-  - `POST /predict_emotion` 정상(예측 JSON 반환)
+아래는 현재 코드 구조상 **실행 경로로 신뢰할 수 있는 부분**입니다.
 
-### ⚠️ 완전 검증하지 못한 항목
+- `uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload`
+- `GET /health`
+- `POST /predict_emotion`
+- `python -m pytest -q`
+- `frontend/` 정적 서빙 후 백엔드 호출
 
+### 🟡 부분적으로만 신뢰할 수 있는 경로
+
+- `frontend/`의 웹캠 분석 기능
+  - 브라우저에서 MediaPipe JavaScript를 사용합니다.
+  - 백엔드 API와 연결 구조는 맞지만, 실제 정확도/입력 품질은 웹캠 환경에 크게 의존합니다.
+- 33개 관절 입력 경로
+  - `frontend/app.js`는 웹캠 수집 시 33개 관절을 서버로 전송합니다.
+  - `src/main.py`와 `src/feature_extractor.py`는 `n_joints`를 받도록 되어 있어 구조상 처리 가능하지만, 실제 모델 학습 분포와 완전히 일치하는지는 별도 검토가 필요합니다.
+
+### ❌ 이 README의 “검증 완료” 범위에 포함하지 않는 경로
+
+- `src/model.py`를 직접 서버 엔트리포인트로 쓰는 실행
 - `scripts/extract_gait_keypoints.py`, `scripts/gait_emotion_predct.py`의 end-to-end 실행
-  - 외부 영상/입력 파일 및 환경 전제 필요
-- Python 3.12 환경에서 Python용 `mediapipe` 직접 실행 경로
-  - 본 저장소 핵심 API 실행에는 필요 없으므로 기본 설치 의존성에서 분리
+- Python 3.12 환경에서 Python 패키지 `mediapipe`를 직접 사용하는 경로
 
 ---
 
 ## 4) 실행을 막던 문제(원인)
 
-초기 상태에서 `pip install -r requirements.txt`가 실패했습니다.
+초기 상태에서 가장 큰 문제는 **설치/실행 기준이 README와 실제 코드 사이에서 혼동될 수 있다는 점**입니다.
 
-- 원인 1: `numpy==1.24.4` 고정
-  - Python 3.12에서 해당 버전 설치 실패
-- 원인 2: OpenCV 고정 버전(`4.7.0.72`)은 Python 3.12 환경에서 호환 문제가 발생할 수 있음
-- 원인 3: `mediapipe`는 Python 버전/플랫폼 의존성이 큰데, 핵심 API 실행에 필수는 아님
+핵심 원인은 다음과 같습니다.
+
+1. **실제 엔트리포인트 혼동**
+   - 현재 저장소에서 실제 엔트리포인트는 `src/main.py`인데,
+   - `src/model.py`도 별도 FastAPI 앱처럼 보여 사용자가 잘못 실행할 수 있습니다.
+
+2. **의존성 버전 문제 가능성**
+   - `numpy==1.24.4` 같은 구버전은 Python 3.12에서 설치 실패 가능성이 있습니다.
+   - OpenCV/MediaPipe도 Python 버전과 플랫폼에 따라 제약이 있습니다.
+
+3. **외부 자산 의존성**
+   - `models/deployment/gait_emotion_api_model.joblib` 파일이 없으면 예측 API는 동작하지 않습니다.
+   - Git LFS로 관리되는 환경이라면 모델 파일이 비어 있거나 내려받아지지 않았을 수 있습니다.
 
 ---
 
-## 5) 실행 가능하도록 실제 변경한 내용
+## 5) 실행 가능하도록 실제로 반영/정리해야 하는 핵심 포인트
 
-### 변경 파일
-- `requirements.txt`
+현재 코드 기준으로, 사용자가 실제로 실행할 때 가장 중요한 사실은 아래 5가지입니다.
 
-### 변경 사항
-1. `numpy`를 Python 버전에 따라 분기
-   - `<3.12`: `1.24.4`
-   - `>=3.12`: `1.26.4`
-2. `opencv-python`, `opencv-contrib-python`도 Python 버전에 따라 분기
-   - `<3.12`: `4.7.0.72`
-   - `>=3.12`: `4.10.0.84`
-3. `mediapipe`는 Python `<3.12`에서만 기본 설치되도록 조건부 지정
-   - 핵심 API 실행 경로와 테스트는 mediapipe 없이 동작
-
-즉, **프로젝트 의도(기존 API/모델 추론 흐름)는 유지하면서, 설치 실패만 최소 수정으로 해결**했습니다.
+1. **실행 명령은 `uvicorn src.main:app` 기준으로 봐야 합니다.**
+2. **모델 파일은 `models/deployment/gait_emotion_api_model.joblib` 이어야 합니다.**
+3. **프론트엔드 웹캠 기능은 Python `mediapipe`가 아니라 브라우저용 MediaPipe JS를 사용합니다.**
+4. **`src/model.py`는 레거시/실험 성격으로 보고, 주 실행 경로로 사용하지 않는 것이 안전합니다.**
+5. **`scripts/`는 실험용이므로 README의 공식 실행 절차와 분리해서 봐야 합니다.**
 
 ---
 
@@ -115,12 +152,12 @@ gait-emotion-recognition/
 ## 6-1. 사전 준비물
 
 - OS: Linux/macOS/Windows
-- Python: 3.10 이상 권장 (3.12 포함)
+- Python: 3.10 이상 권장
 - Git
-- (선택) Git LFS
+- (권장) Git LFS
 - (선택) Docker / Docker Compose
 
-> 모델 파일이 LFS로 관리되는 경우를 대비해, 아래 명령을 권장합니다.
+모델 파일이 LFS로 관리되는 경우를 대비해, 아래 명령을 권장합니다.
 
 ```bash
 git lfs install
@@ -203,7 +240,8 @@ curl -X POST "http://localhost:8000/predict_emotion" \
 python -m pytest -q
 ```
 
-예상: 모든 테스트 통과.
+`tests/test_api.py`, `tests/test_model.py`는 현재 `src.main` 중심 경로를 기준으로 작성되어 있습니다.
+즉, 테스트가 의미하는 것은 **현재 저장소의 주 실행 경로가 `src/main.py`라는 점**을 다시 확인해준다는 것입니다.
 
 ---
 
@@ -219,6 +257,22 @@ python -m http.server 5500
 브라우저에서 `http://localhost:5500` 접속 후,
 백엔드(`http://localhost:8000`)가 켜져 있어야 API 호출이 동작합니다.
 
+### 프론트엔드 사용 방식 2가지
+
+1. **텍스트(JSON) 입력 테스트**
+   - textarea에 keypoints JSON 입력
+   - `predictEmotion()` → `/predict_emotion` 호출
+
+2. **웹캠 분석 데모**
+   - 브라우저 MediaPipe JS가 관절을 수집
+   - `frontend/app.js`가 이를 `skeleton_data`로 변환해 서버에 전송
+
+### 중요한 점
+
+- 프론트엔드 웹캠 기능은 **브라우저의 MediaPipe JavaScript**를 사용합니다.
+- 이것은 `requirements.txt`에 들어가는 **Python 패키지 `mediapipe`와 별개**입니다.
+- 따라서 Python 3.12에서 `mediapipe`를 기본 설치하지 않더라도, 브라우저 데모 자체는 동작할 수 있습니다.
+
 ---
 
 ## 6-6. Docker 실행
@@ -230,6 +284,9 @@ docker-compose up --build
 - 기본적으로 `uvicorn src.main:app` 실행
 - 포트: `8000:8000`
 
+현재 `docker-compose.yml`은 `src/`와 `models/`를 마운트합니다.
+즉, Docker 실행 시에도 **모델 파일 존재 여부가 매우 중요**합니다.
+
 ---
 
 ## 7) 데이터셋/모델/사전학습 파일 요구사항
@@ -238,18 +295,26 @@ docker-compose up --build
 
 - `models/deployment/gait_emotion_api_model.joblib`
   - API가 시작될 때 로드
-  - 없거나 손상되면 `POST /predict_emotion`에서 503 발생
+  - 없거나 손상되면 `POST /predict_emotion`에서 `503` 발생 가능
 
 ### 입력 데이터 형식 요구사항
 
-- `skeleton_data`: `"x,y,z"` 문자열 배열
-- `keypoints`: `[[x,y,z], ...]` 숫자 배열
-- `keypoints` 사용 시 `len(keypoints) % n_joints == 0` 이어야 함
+#### A. `skeleton_data`
+- 형식: `"x,y,z"` 문자열 배열
+- 각 문자열은 반드시 3개 좌표를 포함해야 함
+- 전체 길이는 사실상 `n_joints * n_frames` 구조여야 함
+
+#### B. `keypoints`
+- 형식: `[[x, y, z], ...]`
+- 비어 있으면 안 됨
+- 모든 원소가 길이 3의 숫자 배열이어야 함
+- `len(keypoints) % n_joints == 0` 이어야 함
 
 ### 선택 사항
 
 - 영상에서 키포인트 추출 자동화(`scripts/extract_gait_keypoints.py`)는
   `opencv`, `mediapipe` 등 추가 환경 의존성이 있습니다.
+- 이 경로는 현재 README의 핵심 실행 검증 범위 밖입니다.
 
 ---
 
@@ -261,34 +326,86 @@ docker-compose up --build
   ```bash
   python --version
   ```
-- 현재 `requirements.txt`는 Python 3.12에서도 설치 가능하도록 분기되어 있습니다.
-- 그래도 실패하면 가상환경을 새로 만들고 재시도하세요.
+- Python 3.12에서는 일부 패키지 호환성 문제가 발생할 수 있습니다.
+- 가능하면 Python 3.10 또는 3.11 가상환경에서 먼저 재현하는 것을 권장합니다.
+- `mediapipe`가 꼭 필요하지 않다면, 핵심 API 실행은 `src/main.py` 기준으로 먼저 확인하세요.
 
 ### Q2. `/predict_emotion`이 503을 반환합니다.
 
-- `models/deployment/gait_emotion_api_model.joblib` 파일 존재/크기 확인
-- LFS 사용 저장소라면 `git lfs pull` 실행
+가능한 원인:
+- `models/deployment/gait_emotion_api_model.joblib` 파일이 없음
+- 파일이 비어 있음
+- Git LFS로 내려받지 못함
+- 모델 파일은 있으나 손상됨
 
-### Q3. 프론트엔드에서 API 호출 실패(CORS/연결오류)
+확인 항목:
+```bash
+ls -lh models/deployment
+```
+
+필요 시:
+```bash
+git lfs pull
+```
+
+### Q3. 프론트엔드에서 API 호출 실패(CORS/연결 오류)가 납니다.
 
 - 백엔드가 `http://localhost:8000`에서 실행 중인지 확인
 - 프론트엔드를 `file://`로 직접 열지 말고 `python -m http.server`로 서빙
+- 브라우저 콘솔에서 `/health` 연결 로그 확인
+
+### Q4. `src/model.py`로 서버를 띄워도 되나요?
+
+권장하지 않습니다.
+
+이 저장소에서 **현재 주 실행 경로는 `src/main.py`** 입니다.
+`src/model.py`는 구조상 별도 FastAPI 앱처럼 보이지만,
+내부 특징 추출 방식이 현재 주 파이프라인과 다르므로 혼동을 일으킬 수 있습니다.
 
 ---
 
-## 9) 현재 한계 / 주의사항
+## 9) 현재 확인된 주의사항
 
-- 핵심 API/테스트 경로는 검증 완료했지만, `scripts/`는 연구/실험 스크립트 성격입니다.
-- Python 기반 MediaPipe 처리까지 반드시 필요하면 Python 3.10 가상환경을 별도로 두는 것을 권장합니다.
-- 실제 예측 품질은 입력 데이터 품질과 모델 학습 데이터 분포에 크게 의존합니다.
+이 섹션은 현재 저장소를 사용할 때 가장 중요한 경계 조건을 정리한 것입니다.
+
+### 9-1. 반드시 기억할 점
+
+1. **실제 실행 엔트리포인트는 `src.main:app` 입니다.**
+2. **`src/model.py`는 현재 공식 실행 경로로 보지 않는 것이 안전합니다.**
+3. **예측 API는 모델 파일이 있어야만 정상 동작합니다.**
+4. **프론트엔드 웹캠 기능은 브라우저용 MediaPipe JS를 사용합니다.**
+5. **`scripts/`는 실험용 성격이 강하므로 README의 공식 실행 절차와 분리해서 이해해야 합니다.**
+
+### 9-2. 검증 범위 구분
+
+#### ✅ 현재 확인된 범위
+- `src/main.py` 기반 API 구동
+- `/health`
+- `/predict_emotion`
+- `tests/` 기반 기본 검증
+- `frontend/` 정적 파일 서빙 및 API 호출 구조
+
+#### 🟡 추가 검토가 필요한 범위
+- 웹캠 기반 실제 추론 품질
+- 33개 관절 입력이 현재 모델 학습 조건과 얼마나 일치하는지
+- Docker 환경에서의 모델 파일/LFS 상태
+
+#### 🔴 이 README에서 실행 보장을 하지 않는 범위
+- `src/model.py` 직접 사용
+- `scripts/`의 end-to-end 자동 처리
+- Python용 `mediapipe` 기반 전체 실험 파이프라인
 
 ---
 
-## 10) 이번 점검에서의 검증 로그 요약
+## 10) 이번 점검 요약
 
-- `pip install -r requirements.txt` ✅
-- `python -m pytest -q` → `13 passed` ✅
-- `GET /health` 응답 확인 ✅
-- `POST /predict_emotion` 실제 응답 확인 ✅
+현재 저장소를 사용할 때 가장 중요한 결론은 다음과 같습니다.
 
-필요하면 다음 단계로, `scripts/`를 현재 API 명세와 완전히 맞추는 리팩터링도 진행할 수 있습니다.
+- **실행 기준은 `src/main.py`다.**
+- **예측 API는 모델 파일이 있어야 한다.**
+- **프론트엔드는 단순 정적 파일이지만, 웹캠 기능은 브라우저 MediaPipe JS에 의존한다.**
+- **`src/model.py`, `scripts/`는 현재 공식 실행 절차의 중심이 아니다.**
+
+즉, 처음 실행하는 사용자는 **README의 로컬 실행 절차 → `/health` 확인 → `/predict_emotion` 테스트** 순서로 접근하는 것이 가장 안전합니다.
+
+필요하면 다음 단계로, `src/model.py`를 레거시 파일로 명시적으로 정리하거나 `scripts/`를 현재 API 명세에 맞게 리팩터링할 수 있습니다.
