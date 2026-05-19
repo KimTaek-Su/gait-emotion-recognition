@@ -146,6 +146,26 @@ def test_predict_emotion_with_valid_keypoints_array():
         assert "detail" in data
 
 
+def test_predict_emotion_with_33_joint_skeleton_data():
+    skeleton_data = []
+    for frame_idx in range(4):
+        for joint_idx in range(33):
+            skeleton_data.append(
+                f"{0.1 + frame_idx * 0.01 + joint_idx * 0.001},"
+                f"{0.2 + frame_idx * 0.01 + joint_idx * 0.001},"
+                f"{0.3 + frame_idx * 0.005}"
+            )
+
+    response = client.post(
+        "/predict_emotion",
+        json={"skeleton_data": skeleton_data, "n_joints": 33},
+    )
+
+    assert response.status_code in [200, 503]
+    data = response.json()
+    assert "detail" in data or "emotion" in data
+
+
 def test_cors_preflight_endpoint():
     response = client.options(
         "/predict_emotion",

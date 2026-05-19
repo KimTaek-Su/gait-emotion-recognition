@@ -77,7 +77,7 @@
 
 ### 사전 요구사항
 
-- Python 3.10+
+- Python 3.10.x (권장: 3.10, `requirements.txt` 고정 버전 기준)
 - Docker / Docker Compose (선택)
 - Git LFS
 
@@ -238,7 +238,7 @@ POST /predict_emotion
 pytest tests/
 ```
 
-> 참고: 현재 저장소의 테스트 코드는 서버 구현과 일부 기대값이 어긋날 수 있으므로, 테스트 실패 시 `tests/test_api.py`와 `src/main.py`를 함께 점검해야 합니다.
+> 테스트는 현재 `src/main.py` 기준 API/특징 추출 동작을 검증합니다.
 
 ---
 
@@ -246,9 +246,9 @@ pytest tests/
 
 - 실제 서버 엔트리포인트는 `src/main.py`입니다.
 - README의 실행 방법, 엔드포인트, 응답 예시는 코드 변경 시 함께 업데이트되어야 합니다.
-- 배포 ���델 파일은 현재 `models/deployment/gait_emotion_api_model.joblib`입니다.
-- `tests/test_api.py`는 일부 구버전 스펙(예: 버전 문자열, 입력 형식)을 기대하고 있을 수 있습니다.
-- 프론트엔드와 백엔드의 `n_joints` 처리 규약은 추가 정리가 필요할 수 있습니다.
+- 배포 모델 파일은 현재 `models/deployment/gait_emotion_api_model.joblib`입니다.
+- 프론트엔드 웹캠 경로는 MediaPipe 33개 관절을 `skeleton_data`로 전송하며 `n_joints=33`을 사용합니다.
+- 텍스트 입력 경로의 `keypoints`는 `[[x, y, z], ...]` 형식을 사용합니다.
 
 ---
 

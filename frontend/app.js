@@ -338,11 +338,11 @@ async function analyzeFromWebcam() {
     // 1. 버퍼에 쌓인 모든 관절 데이터를 하나로 펼침
     let allSkeletonData = skeletonDataBuffer.flat();
 
-    // 2. [중요] 17개 관절 데이터가 한 세트이므로, 총 개수가 17의 배수가 되도록 뒤를 자름
-    const numJoints = 17;
+    // 2. 수집 단계에서 33개 관절을 사용하므로 서버에도 같은 개수로 전송
+    const numJoints = 33;
     const remainder = allSkeletonData.length % numJoints;
     if (remainder !== 0) {
-        console.warn('데이터 불일치 발생: ${remainder}개의 관절 데이터를 제외합니다.');
+        console.warn(`데이터 불일치 발생: ${remainder}개의 관절 데이터를 제외합니다.`);
         allSkeletonData = allSkeletonData.slice(0, allSkeletonData.length - remainder);
     }
 
@@ -357,7 +357,7 @@ async function analyzeFromWebcam() {
         const response = await fetch(`${API_URL}/predict_emotion`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ skeleton_data: allSkeletonData, n_joints: 17 })
+            body: JSON.stringify({ skeleton_data: formattedData, n_joints: numJoints })
         });
         if (!response.ok) {
             const errorData = await response.json();
