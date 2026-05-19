@@ -27,7 +27,7 @@ gait-emotion-recognition/
 │   └── test_model.py          # feature 변환/패딩 등 유닛 테스트
 ├── scripts/
 │   ├── extract_gait_keypoints.py
-│   └── gait_emotion_predct.py
+│   └── gait_emotion_predct.py   # 원본 파일명(typo 포함)
 ├── docs/
 │   └── API_GUIDE.md
 ├── requirements.txt
