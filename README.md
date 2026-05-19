@@ -395,6 +395,24 @@ git lfs pull
 - `scripts/`의 end-to-end 자동 처리
 - Python용 `mediapipe` 기반 전체 실험 파이프라인
 
+### 9-3. 지금 이 저장소를 처음 실행하는 사람에게 권장하는 순서
+
+처음 실행하는 경우에는 아래 순서를 따르는 것이 가장 안전합니다.
+
+1. **`uvicorn src.main:app`으로 서버를 먼저 띄웁니다.**
+2. **`GET /health`로 서버가 정상 기동했는지 확인합니다.**
+3. **`POST /predict_emotion`에 예제 요청을 보내 모델 로드와 추론이 되는지 확인합니다.**
+4. **그 다음에 `frontend/`를 정적 서버로 띄워 브라우저 데모를 확인합니다.**
+5. **`src/model.py`, `scripts/`는 마지막에 참고용/실험용으로만 살펴보는 것이 좋습니다.**
+
+### 9-4. 이 섹션만 빠르게 보고 싶다면
+
+- **서버 실행 기준:** `src.main:app`
+- **필수 모델 파일:** `models/deployment/gait_emotion_api_model.joblib`
+- **공식 확인 경로:** `/health` → `/predict_emotion`
+- **프론트엔드 웹캠:** 브라우저 MediaPipe JS 기반
+- **주의할 파일:** `src/model.py`, `scripts/`
+
 ---
 
 ## 10) 이번 점검 요약
