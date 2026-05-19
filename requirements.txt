@@ -12,7 +12,9 @@ starlette==0.50.0
 python-multipart==0.0.20
 
 # --- 데이터 처리 ---
-numpy==1.24.4
+# Python 3.12에서는 numpy 1.24.x 휠이 없어 설치 실패하므로 버전 분기
+numpy==1.24.4; python_version < "3.12"
+numpy==1.26.4; python_version >= "3.12"
 pandas==2.3.3
 scipy==1.15.3
 
@@ -21,9 +23,11 @@ scikit-learn==1.6.1
 joblib==1.5.2
 
 # --- 컴퓨터 비전 ---
-opencv-python==4.7.0.72
-opencv-contrib-python==4.7.0.72
-mediapipe==0.10.21  # 키포인트 추출용 (최신 안정 버전)
+opencv-python==4.7.0.72; python_version < "3.12"
+opencv-contrib-python==4.7.0.72; python_version < "3.12"
+opencv-python==4.10.0.84; python_version >= "3.12"
+opencv-contrib-python==4.10.0.84; python_version >= "3.12"
+mediapipe==0.10.21; python_version < "3.12"  # Python 3.12에서는 기본 설치 제외
 
 # --- 유틸리티 ---
 pydantic==2.12.5
