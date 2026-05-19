@@ -1,3 +1,14 @@
+"""
+레거시/실험용 FastAPI 예시 모듈입니다.
+
+주의:
+- 이 파일은 현재 저장소의 공식 실행 엔트리포인트가 아닙니다.
+- 실제 백엔드 실행은 `uvicorn src.main:app` 기준으로 해야 합니다.
+- 이 파일 내부의 특징 추출 로직은 예시/디버그 성격이며,
+  `src.main.py` + `src.feature_extractor.py` 기반의 현재 주 파이프라인과 다릅니다.
+- 따라서 실행/검증/배포 기준은 반드시 `src/main.py`를 우선으로 보세요.
+"""
+
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, validator
