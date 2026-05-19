@@ -5,10 +5,10 @@
 ![Docker](https://img.shields.io/badge/Docker-Ready-blue)
 ![License](https://img.shields.io/badge/License-MIT-yellow)
 
-**최고 정확도 96.42%를 달성한 Bi-LSTM HCF Fusion 기반, 걸음걸이 패턴의 실시간 감정 인식 AI 시스템**
+**Bi-LSTM HCF Fusion 기반, 걸음걸이 패턴의 실시간 감정 인식 API 시스템**
 
 사람의 걸음걸이(Gait)는 감정 상태에 따라 미묘하게 변화합니다.  
-이 프로젝트는 **Bi-LSTM_HCF_Fusion 딥러닝 모델**을 활용하여 걸음걸이 데이터로부터 감정(행복, 슬픔, 분노 등)을 자동으로 예측하는 REST API를 제공합니다.
+이 프로젝트는 걸음걸이 키포인트/스켈레톤 데이터로부터 감정(행복, 슬픔, 분노 등)을 예측하는 FastAPI 기반 REST API를 제공합니다.
 
 ---
 
@@ -16,66 +16,39 @@
 
 - [프로젝트 소개](#-프로젝트-소개)
 - [주요 특징](#-주요-특징)
-- [공익적 활용](#-공익적-활용)
 - [기술 스택](#-기술-스택)
-- [성능 지표](#-성능-지표)
-- [방법론: 14가지 수제 특징 (HCF) + LSTM 시계열](#-방법론-hcf14--bi-lstm-시계열-융합)
 - [시작하기](#-시작하기)
-  - [Docker로 실행 (권장)](#1-docker로-실행-권장)
+  - [Docker로 실행](#1-docker로-실행)
   - [로컬 환경에서 실행](#2-로컬-환경에서-실행)
 - [프로젝트 구조](#-프로젝트-구조)
 - [API 사용법](#-api-사용법)
-- [프론트엔드](#-프론트엔드)
 - [테스트](#-테스트)
-- [개발 가이드](#-개발-가이드)
-- [문제 해결](#-문제-해결)
-- [기여하기](#-기여하기)
-- [라이선스](#-라이선스)
+- [현재 확인된 주의사항](#-현재-확인된-주의사항)
 
 ---
 
 ## 🎯 프로젝트 소개
 
-걸음걸이 감정 인식(Gait-Emotion Recognition)은 사람의 독특한 걸음걸이 패턴을 분석하여 감정 상태를 추론하는 기술입니다.
-이 프로젝트는 **HCF 기반 14차원 특징 벡터와 Raw Keypoint 시계열 입력을 Bi-LSTM(Fusion) 딥러닝 모델**에 투입하여  
-최고 정확도 96.42%를 달성했습니다.
+이 저장소는 걸음걸이 기반 감정 인식을 위한 API 서버와 프론트엔드 예제를 포함합니다.
+현재 서버 엔트리포인트는 `src/main.py`이며, Docker와 로컬 실행 모두 이 엔트리포인트를 기준으로 동작합니다.
 
 ### 전체 파이프라인
 
-1. **데이터 입력:** MediaPipe 등에서 추출한 신체 키포인트(관절 좌표)
-2. **특징 추출:** 걸음걸이의 **14가지 수제 특징(HCF)** 추출 및 프레임 시계열
-3. **감정 예측:** **Bi-LSTM_HCF_Fusion** 딥러닝 모델로 감정 분류 (최종 배포 모델)
-4. **결과 반환:** 예측된 감정과 신뢰도를 JSON 형태로 반환
+1. **데이터 입력:** MediaPipe 등에서 추출한 신체 키포인트 또는 skeleton data
+2. **특징 추출:** `src/feature_extractor.py`에서 14개 HCF 특징 추출
+3. **감정 예측:** 배포 모델 `models/deployment/gait_emotion_api_model.joblib` 로드
+4. **결과 반환:** 예측 감정, 신뢰도, 확률 분포를 JSON으로 반환
 
 ---
 
 ## ✨ 주요 특징
 
-- ✅ **RESTful API:** FastAPI 기반의 고성능 API
-- ✅ **Docker 지원:** 어디서든 동일한 환경 실행
-- ✅ **Bi-LSTM HCF Fusion:** 시계열 + 특징 벡터 융합으로 고정확도 딥러닝 예측
-- ✅ **실시간 처리:** 빠른 추론 속도 (80~100ms 이내)
-- ✅ **상세 한글 주석:** 비전공자도 이해 가능한 코드, 주석 제공
-- ✅ **프론트엔드:** 웹 인터페이스 제공
-- ✅ **자동 테스트:** pytest로 API 엔드포인트 자동 검증
-- ✅ **CORS 지원:** 프론트엔드에서 자유 호출 지원
-
----
-
-## 🌍 공익적 활용
-
-이 기술은 다음과 같이 다양한 공익적 목적으로 활용될 수 있습니다.
-
-1. **범죄 예방 및 공공 안전**
-   - CCTV 행동 감지와 위험 감정 조기 판단
-2. **군중 안전 경보 시스템**
-   - 실시간 인파 감정 상태 모니터링, 사고 예방
-3. **놀이공원, 공공장소 감정 모니터링**
-   - 방문객 만족도 실시간 파악, 안전 및 서비스 관리
-4. **의료 및 헬스케어**
-   - 우울증, 불안 등 감정 상태 분석(고령자/환자 케어 지원)
-5. **로봇, 스마트시티 등 첨단 인식**
-   - 로봇이 인간 감정에 따라 적응적 반응, 도시 단위 행복도 측정
+- ✅ **FastAPI 기반 REST API**
+- ✅ **Docker / docker-compose 지원**
+- ✅ **HCF(14) 특징 추출 로직 포함**
+- ✅ **CORS 허용 설정 포함**
+- ✅ **프론트엔드 데모 포함**
+- ✅ **pytest 테스트 파일 포함**
 
 ---
 
@@ -87,264 +60,198 @@
 - Uvicorn 0.38.0
 - Pydantic 2.12.5
 
-**딥러닝/머신러닝**
-- TensorFlow/Keras 2.x (Bi-LSTM 구현 및 Inference)
-- scikit-learn 1.6.1 (전처리 파이프/보완용)
-- joblib 1.5.2 (서브모델, 유틸)
-- numpy 1.24.4 (수치 연산)
-- mediapipe (키포인트 추출에 활용)
+**머신러닝 / 데이터 처리**
+- scikit-learn 1.6.1
+- joblib 1.5.2
+- numpy 1.24.4
+- pandas 2.3.3
+- scipy 1.15.3
 
 **컴퓨터 비전**
-- OpenCV 4.7.0.72 (영상/좌표 데이터 처리)
-
-**인프라**
-- Docker / docker-compose
-- Git LFS (딥러닝 모델/대용량파일)
-
-**개발 도구**
-- pytest, httpx
-
----
-
-## 📊 성능 지표
-
-| 모델 아키텍처             | 사용 특징    | 정확도   | 응답 시간  | 비고             |
-|:-------------------------|:----------- |:-------- |:---------- |:-----------------|
-| Bi-LSTM HCF Fusion (배포) | Raw+HCF     | 96.42%   | ~90ms      | 최종 배포모델    |
-| KNN                      | 14개 HCF    | 96.99%   | 0.048 ms   | 비공개           |
-| Bi-LSTM                  | Raw-only    | 94.66%   | ~80ms      | 시계열 only      |
-| Random Forest            | 14개 HCF    | 72.81%   | 0.072 ms   | 보조/비교모델    |
-| SVM                      | 14개 HCF    | 34.42%   | 약 15ms    | 전통 ML          |
-
-> **현재 `models/deployment/Bi-LSTM_HCF_Fusion_final_results.pkl`이 서버에 배포되며 모든 감정 예측에 실사용됩니다.**
-
----
-
-## 🧬 방법론: HCF(14) + Bi-LSTM 시계열 융합
-
-- **HCF(Hand Crafted Features):**  
-  보폭, 각도 변화율, 관절 움직임 패턴 등 14개 주요 신체 역학 특징 추출
-- **Bi-LSTM:**  
-  키포인트의 시계열(raw trajectory) 전체 패턴을 동적으로 모델링
-- **Fusion Layer:**  
-  HCF 벡터와 LSTM 임베딩 특징을 결합해 감정 구분력 극대화
-
-> 구현 상세: `src/feature_extractor.py`, `src/model.py` 참고  
-> 딥러닝 아키텍처/재현: `models/research/` 참조
+- OpenCV 4.7.0.72
+- MediaPipe 0.10.21
 
 ---
 
 ## 🚀 시작하기
 
-### 환경 정보
-
-- Python 3.10+
-- 지원 감정: Happy, Sad, Fear, Disgust, Angry, Neutral (6가지)
-
 ### 사전 요구사항
 
-- **Docker:** v20.10 이상 권장, docker-compose v1.29+
-- **로컬 실행:** Python 3.10+, pip
-- **딥러닝 모델 파일 LFS 관리:**  
-  (`git lfs install`, `git lfs pull`)
+- Python 3.10+
+- Docker / Docker Compose (선택)
+- Git LFS
+
+모델 파일은 Git LFS로 관리되므로 아래 명령이 필요합니다.
+
+```bash
+git lfs install
+git lfs pull
+```
 
 ---
 
-### 1. Docker로 실행 (권장)
-
-모든 의존성 및 실행환경 자동 셋업!
+### 1. Docker로 실행
 
 ```bash
-# 1. 저장소 클론
+# 저장소 클론
 git clone https://github.com/KimTaek-Su/gait-emotion-recognition.git
 cd gait-emotion-recognition
 
-# 2. Docker Compose로 빌드 및 실행
-docker-compose up --build
+# LFS 모델 다운로드
+git lfs install
+git lfs pull
 
-# 3. 서버 접속/확인
-# Swagger 테스트: http://localhost:8000/docs
-# API 기본주소: http://localhost:8000
+# 컨테이너 실행
+docker-compose up --build
 ```
-> **참고:** 배포용 모델(`models/deployment/Bi-LSTM_HCF_Fusion_final_results.pkl`)이 자동 로드됩니다.
+
+서버 실행 후 접속:
+- Swagger UI: `http://localhost:8000/docs`
+- Health Check: `http://localhost:8000/health`
+
+> 현재 Dockerfile은 `uvicorn src.main:app --host 0.0.0.0 --port 8000`로 서버를 실행합니다.
 
 ---
 
 ### 2. 로컬 환경에서 실행
 
-Python 직접 실행 안내:
-
 ```bash
-# 1. 저장소 클론
+# 저장소 클론
 git clone https://github.com/KimTaek-Su/gait-emotion-recognition.git
 cd gait-emotion-recognition
 
-# 2. 가상환경 (권장)
+# 가상환경 생성 및 활성화
 python -m venv venv
-source venv/bin/activate       # (Linux/macOS)
-venv\Scripts\activate          # (Windows)
+source venv/bin/activate       # Linux/macOS
+venv\Scripts\activate          # Windows
 
-# 3. 패키지 설치
+# 패키지 설치
 pip install -r requirements.txt
 
-# 4. (대용량 모델 LFS)
+# LFS 모델 다운로드
 git lfs install
 git lfs pull
 
-# 5. 서버 실행
-python main.py
+# 서버 실행
+uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 ---
 
 ## 📁 프로젝트 구조
 
-```
+```text
 gait-emotion-recognition/
 ├── Dockerfile
 ├── docker-compose.yml
 ├── README.md
 ├── requirements.txt
-├── main.py
 ├── src/
-│   ├── feature_extractor.py         # 14가지 특징(HCF) 추출 및 시계열/전처리
-│   └── model.py                    # Bi-LSTM_HCF_Fusion 모델 로드/추론
-├── scripts/
-│   ├── gait_emotion_predict.py      # 예시: 특징 추출/감정예측 유틸
-│   ├── extract_gait_keypoints.py    # 예시: 영상 → 키포인트 변환
-│   └── ...
+│   ├── __init__.py
+│   ├── main.py                  # FastAPI 서버 엔트리포인트
+│   ├── feature_extractor.py     # HCF 특징 추출
+│   └── model.py                 # 실험/보조 코드
 ├── models/
 │   ├── deployment/
-│   │   └── Bi-LSTM_HCF_Fusion_final_results.pkl  # 최종 배포 Bi-LSTM Fusion 모델 (LFS 관리)
+│   │   └── gait_emotion_api_model.joblib
 │   └── research/
-│       ├── ... (실험용 모델, 로그 등)
 ├── frontend/
-│   ├── index.html
-│   └── ...
 ├── tests/
-│   ├── test_api.py
-│   └── ...
 └── .gitattributes
 ```
-- **main.py**: FastAPI 서버 진입점 (Bi-LSTM 모델 API)
-- **src/**: 특징 추출/모델 관리 등 내부 로직
-- **scripts/**: 분석/추출/개별 실행 테스트 스크립트(별도 실행)
-- **models/deployment/**: 배포용 Bi-LSTM Fusion 모델 (LFS 대상)
-- **frontend/**: 웹 데모
-- **tests/**: 자동화 테스트
-- **.gitattributes**: LFS 설정
 
 ---
 
 ## 🔌 API 사용법
 
-### 문서 및 UI 테스트
+### Health Check
 
-- FastAPI 자동 문서: [`http://localhost:8000/docs`](http://localhost:8000/docs)
-
-### 주요 엔드포인트 예시
-
-#### 감정 예측
-```
-POST /predict-emotion
+```http
+GET /health
 ```
 
-**입력 예시 (application/json)**
+예시 응답:
+
 ```json
 {
-  "keypoints": [[[x, y], ...], ...]  // 프레임 순서별 관절 (시계열 2D 배열)
+  "status": "healthy",
+  "service": "gait-emotion-recognition",
+  "version": "2.0.0"
 }
 ```
-- 입력은 **(프레임개수, 관절수, 좌표차원)**의 3차원 리스트
-- 또는 14차원 HCF 특징벡터 시계열 (internal 변환)
 
-**응답 예시**
+### 감정 예측
+
+```http
+POST /predict_emotion
+```
+
+현재 서버는 아래 두 입력 형식을 처리합니다.
+
+#### 1) `skeleton_data` 사용 예시
+
+```json
+{
+  "skeleton_data": ["0.1,0.2,0.0", "0.2,0.3,0.0"],
+  "n_joints": 17
+}
+```
+
+#### 2) `keypoints` 사용 예시
+
+```json
+{
+  "keypoints": [
+    [0.1, 0.2, 0.0],
+    [0.2, 0.3, 0.0]
+  ],
+  "n_joints": 13
+}
+```
+
+예시 응답:
+
 ```json
 {
   "emotion": "happy",
   "confidence": 0.97,
+  "confidence_level": "high",
   "probabilities": {
     "happy": 0.97,
-    "sad": 0.02,
-    ...
+    "sad": 0.01,
+    "fear": 0.01,
+    "disgust": 0.00,
+    "angry": 0.00,
+    "neutral": 0.01
   },
-  "features": [[1.2, ...14개], ...],        // 시계열의 HCF 14D 백터
-  "features_shape": [timesteps, 14],
+  "features": [0.1, 0.2, 0.3],
+  "features_shape": [1, 14],
   "message": "감정이 성공적으로 예측되었습니다."
 }
 ```
-
-#### 서버 상태 체크
-
-```
-GET /health
-```
-응답: `{"status":"ok"}`
-
----
-
-## 🌐 프론트엔드
-
-- `frontend/` 폴더에 웹 데모(html) 포함
-- API 서버와 도메인이 다를 경우 FastAPI에서 CORS 허용
 
 ---
 
 ## 🧪 테스트
 
-- Pytest 기반 자동 테스트:  
-  ```bash
-  pytest tests/
-  ```
-- API, 특징 추출, 모델로드 등 커버
+```bash
+pytest tests/
+```
+
+> 참고: 현재 저장소의 테스트 코드는 서버 구현과 일부 기대값이 어긋날 수 있으므로, 테스트 실패 시 `tests/test_api.py`와 `src/main.py`를 함께 점검해야 합니다.
 
 ---
 
-## 🛠 개발 가이드
+## ⚠ 현재 확인된 주의사항
 
-- **한글 주석 & 상세 설명**
-- 특징/HCF 추출, Bi-LSTM 모델 inference 등 명확 분리
-- 모델 교체시 `models/deployment/` 내 pkl 파일만 대체
-- 추가 연구/실험 확장: `scripts/`, `models/research/` 참고
-
----
-
-## 🐞 문제 해결
-
-- **LFS 파일:**  
-  대용량(.pt, .pkl, .h5 등)은 반드시  
-  `git lfs install`, `git lfs pull`, `.gitattributes` 확인
-
-- **실행 에러**
-  - 패키지 미설치 → `pip install -r requirements.txt`
-  - 모델 파일 누락 → `git lfs pull`
-
-- **환경/버전**
-  - Python 3.10, Docker 등 최신 권장
-  - 상세 문의는 [이슈 트래커](https://github.com/KimTaek-Su/gait-emotion-recognition/issues)
-
----
-
-## 🤝 기여하기
-
-1. 저장소 Fork → 새 브랜치 생성
-2. 기능/수정 개발 및 테스트 코딩
-3. Pull Request 제출 (한글/영어 모두 환영)
-4. 코드 리뷰 및 병합
-5. 문의/제안/에러는 [이슈](https://github.com/KimTaek-Su/gait-emotion-recognition/issues) 사용!
+- 실제 서버 엔트리포인트는 `src/main.py`입니다.
+- README의 실행 방법, 엔드포인트, 응답 예시는 코드 변경 시 함께 업데이트되어야 합니다.
+- 배포 ���델 파일은 현재 `models/deployment/gait_emotion_api_model.joblib`입니다.
+- `tests/test_api.py`는 일부 구버전 스펙(예: 버전 문자열, 입력 형식)을 기대하고 있을 수 있습니다.
+- 프론트엔드와 백엔드의 `n_joints` 처리 규약은 추가 정리가 필요할 수 있습니다.
 
 ---
 
 ## 📄 라이선스
 
-- 본 프로젝트는 MIT License 기반입니다.
-- 자유로운 사용·수정·배포가 가능합니다.
-- 라이선스 전문: [LICENSE](./LICENSE) 참조
-
----
-
-**문의/협업:**  
-이메일: taeksu880@gmail.com  
-이슈 트래커: [https://github.com/KimTaek-Su/gait-emotion-recognition/issues](https://github.com/KimTaek-Su/gait-emotion-recognition/issues)
-
----
+이 저장소의 라이선스는 저장소 설정 및 LICENSE 파일을 기준으로 확인하세요.
