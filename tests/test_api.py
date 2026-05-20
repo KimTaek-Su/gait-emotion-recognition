@@ -6,6 +6,8 @@ API 테스트 코드
 
 from fastapi.testclient import TestClient
 from src.main import app
+import src.main as main_module
+from src.main import MODEL_PATH
 
 client = TestClient(app)
 
@@ -30,6 +32,8 @@ def test_health_endpoint():
     assert data["status"] == "healthy"
     assert data["service"] == "gait-emotion-recognition"
     assert data["version"] == "2.0.0"
+    assert "model" in data
+    assert data["model"]["mode"] in ["trained", "fallback"]
 
 
 def test_predict_emotion_with_valid_skeleton_data():
@@ -41,24 +45,20 @@ def test_predict_emotion_with_valid_skeleton_data():
         },
     )
 
-    # 모델이 정상 로드되면 200, 없으면 503
-    assert response.status_code in [200, 503]
+    assert response.status_code == 200
     data = response.json()
-
-    if response.status_code == 200:
-        assert "emotion" in data
-        assert "confidence" in data
-        assert "confidence_level" in data
-        assert "probabilities" in data
-        assert "features" in data
-        assert "message" in data
-        assert isinstance(data["emotion"], str)
-        assert 0 <= data["confidence"] <= 1
-        assert data["confidence_level"] in ["high", "medium", "low"]
-        assert len(data["features"]) >= 14
-    else:
-        assert "detail" in data
-        assert "모델 파일 로드 실패" in data["detail"]
+    assert "emotion" in data
+    assert "confidence" in data
+    assert "confidence_level" in data
+    assert "probabilities" in data
+    assert "features" in data
+    assert "message" in data
+    assert "model" in data
+    assert isinstance(data["emotion"], str)
+    assert 0 <= data["confidence"] <= 1
+    assert data["confidence_level"] in ["high", "medium", "low"]
+    assert len(data["features"]) >= 14
+    assert data["model"]["mode"] in ["trained", "fallback"]
 
 
 def test_predict_emotion_with_minimal_skeleton_data_padding_case():
@@ -70,14 +70,10 @@ def test_predict_emotion_with_minimal_skeleton_data_padding_case():
         },
     )
 
-    assert response.status_code in [200, 503]
+    assert response.status_code == 200
     data = response.json()
-
-    if response.status_code == 200:
-        assert "features" in data
-        assert len(data["features"]) >= 14
-    else:
-        assert "detail" in data
+    assert "features" in data
+    assert len(data["features"]) >= 14
 
 
 def test_predict_emotion_with_invalid_skeleton_data_format():
@@ -135,15 +131,11 @@ def test_predict_emotion_with_valid_keypoints_array():
         },
     )
 
-    assert response.status_code in [200, 503]
+    assert response.status_code == 200
     data = response.json()
-
-    if response.status_code == 200:
-        assert "emotion" in data
-        assert "features" in data
-        assert len(data["features"]) >= 14
-    else:
-        assert "detail" in data
+    assert "emotion" in data
+    assert "features" in data
+    assert len(data["features"]) >= 14
 
 
 def test_predict_emotion_with_33_joint_skeleton_data():
@@ -161,9 +153,49 @@ def test_predict_emotion_with_33_joint_skeleton_data():
         json={"skeleton_data": skeleton_data, "n_joints": 33},
     )
 
-    assert response.status_code in [200, 503]
+    assert response.status_code == 200
     data = response.json()
-    assert "detail" in data or "emotion" in data
+    assert "emotion" in data
+    assert data["model"]["mode"] in ["trained", "fallback"]
+
+
+def test_predict_emotion_uses_fallback_model_when_configured(monkeypatch):
+    class TrackingFallbackModel(main_module.FallbackEmotionModel):
+        def __init__(self):
+            self.called = False
+
+        def predict_proba(self, X):
+            self.called = True
+            return super().predict_proba(X)
+
+    fallback_model = TrackingFallbackModel()
+
+    monkeypatch.setattr(main_module, "fusion_model", fallback_model)
+    monkeypatch.setattr(
+        main_module,
+        "model_runtime_info",
+        {
+            "mode": "fallback",
+            "source": "in_repo_demo",
+            "path": MODEL_PATH,
+            "n_features_in": 14,
+            "fallback_reason": "test override",
+        },
+    )
+
+    response = client.post(
+        "/predict_emotion",
+        json={
+            "skeleton_data": build_valid_skeleton_data(),
+            "n_joints": 17,
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["model"]["mode"] == "fallback"
+    assert data["model"]["source"] == "in_repo_demo"
+    assert fallback_model.called is True
 
 
 def test_cors_preflight_endpoint():

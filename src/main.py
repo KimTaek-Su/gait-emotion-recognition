@@ -42,18 +42,74 @@ async def preflight():
     )
 
 
+class FallbackEmotionModel:
+    """Fresh-clone fallback model for deterministic demo predictions."""
+
+    n_features_in_ = 14
+
+    def predict_proba(self, X):
+        arr = np.array(X, dtype=float)
+        if arr.ndim != 2:
+            raise ValueError("입력 특징은 2차원 배열이어야 합니다.")
+
+        if arr.shape[1] < self.n_features_in_:
+            pad = np.zeros((arr.shape[0], self.n_features_in_ - arr.shape[1]))
+            arr = np.concatenate([arr, pad], axis=1)
+        elif arr.shape[1] > self.n_features_in_:
+            arr = arr[:, : self.n_features_in_]
+
+        mean_val = np.mean(arr, axis=1)
+        std_val = np.std(arr, axis=1)
+        energy = np.linalg.norm(arr, axis=1)
+        first_feature_magnitude = np.abs(arr[:, 0])
+
+        # Heuristic coefficients for demo fallback only (not trained weights):
+        # combine simple motion statistics into a stable 6-class probability output.
+        logits = np.stack(
+            [
+                0.5 * mean_val + 0.2 * std_val,      # happy
+                -0.4 * mean_val + 0.3 * std_val,     # sad
+                0.2 * energy + 0.1 * std_val,        # fear
+                -0.2 * energy + 0.3 * std_val,       # disgust
+                0.2 * first_feature_magnitude - 0.1 * mean_val,  # angry
+                np.full(arr.shape[0], 0.1),          # neutral
+            ],
+            axis=1,
+        )
+        logits = logits - np.max(logits, axis=1, keepdims=True)
+        probs = np.exp(logits)
+        probs = probs / np.sum(probs, axis=1, keepdims=True)
+        return probs
+
+
 def load_model():
+    model_path = os.path.abspath(MODEL_PATH)
+    fallback_model = FallbackEmotionModel()
     try:
         model = joblib.load(MODEL_PATH)
+        if not callable(getattr(model, "predict_proba", None)):
+            raise ValueError("모델에 predict_proba 메서드가 없습니다.")
         print("[MODEL] loaded from:", os.path.abspath(MODEL_PATH))
         print("[MODEL] expected n_features_in_ =", getattr(model, "n_features_in_", None))
-        return model
+        return model, {
+            "mode": "trained",
+            "source": "artifact",
+            "path": model_path,
+            "n_features_in": getattr(model, "n_features_in_", None),
+            "fallback_reason": None,
+        }
     except Exception as e:
-        print(f"[!] 모델 로드 실패: {repr(e)}")
-        return None
+        print(f"[!] 모델 로드 실패. fallback 모델 사용: {repr(e)}")
+        return fallback_model, {
+            "mode": "fallback",
+            "source": "in_repo_demo",
+            "path": model_path,
+            "n_features_in": fallback_model.n_features_in_,
+            "fallback_reason": str(e),
+        }
 
 
-fusion_model = load_model()
+fusion_model, model_runtime_info = load_model()
 
 
 try:
@@ -70,6 +126,7 @@ async def health():
         "status": "healthy",
         "service": "gait-emotion-recognition",
         "version": APP_VERSION,
+        "model": model_runtime_info,
     }
 
 
@@ -145,9 +202,6 @@ async def predict_emotion_endpoint(request: dict):
     except Exception as e:
         raise HTTPException(status_code=422, detail=f"특징 추출 실패: {e}")
 
-    if fusion_model is None:
-        raise HTTPException(status_code=503, detail="모델 파일 로드 실패. 서버 점검 필요.")
-
     try:
         features = pad_features_if_needed(features, fusion_model)
     except Exception as e:
@@ -177,4 +231,5 @@ async def predict_emotion_endpoint(request: dict):
         "features": features,
         "features_shape": list(X.shape),
         "message": "감정이 성공적으로 예측되었습니다.",
+        "model": model_runtime_info,
     }
