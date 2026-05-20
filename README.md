@@ -130,8 +130,10 @@ gait-emotion-recognition/
    - OpenCV/MediaPipe도 Python 버전과 플랫폼에 따라 제약이 있습니다.
 
 3. **외부 자산 의존성**
-   - `models/deployment/gait_emotion_api_model.joblib` 파일이 없으면 예측 API는 동작하지 않습니다.
-   - Git LFS로 관리되는 환경이라면 모델 파일이 비어 있거나 내려받아지지 않았을 수 있습니다.
+   - `models/deployment/gait_emotion_api_model.joblib` 파일이 없거나 손상되어도,
+     서버는 내장 fallback 모델로 `/predict_emotion`을 계속 제공합니다.
+   - Git LFS로 관리되는 환경이라면 모델 파일이 비어 있거나 내려받아지지 않을 수 있으며,
+     이 경우 응답 `model.mode`가 `fallback`으로 표시됩니다.
 
 ---
 
@@ -140,7 +142,7 @@ gait-emotion-recognition/
 현재 코드 기준으로, 사용자가 실제로 실행할 때 가장 중요한 사실은 아래 5가지입니다.
 
 1. **실행 명령은 `uvicorn src.main:app` 기준으로 봐야 합니다.**
-2. **모델 파일은 `models/deployment/gait_emotion_api_model.joblib` 이어야 합니다.**
+2. **모델 파일이 정상 로드되면 실제 학습 모델을 쓰고, 실패 시 내장 fallback 모델을 사용합니다.**
 3. **프론트엔드 웹캠 기능은 Python `mediapipe`가 아니라 브라우저용 MediaPipe JS를 사용합니다.**
 4. **`src/model.py`는 레거시/실험 성격으로 보고, 주 실행 경로로 사용하지 않는 것이 안전합니다.**
 5. **`scripts/`는 실험용이므로 README의 공식 실행 절차와 분리해서 봐야 합니다.**
@@ -158,6 +160,7 @@ gait-emotion-recognition/
 - (선택) Docker / Docker Compose
 
 모델 파일이 LFS로 관리되는 경우를 대비해, 아래 명령을 권장합니다.
+fallback이 있어도 실제 학습 모델 추론을 원하면 LFS 파일을 정상 확보해야 합니다.
 
 ```bash
 git lfs install
@@ -206,7 +209,15 @@ curl http://localhost:8000/health
 예상 응답:
 
 ```json
-{"status":"healthy","service":"gait-emotion-recognition","version":"2.0.0"}
+{
+  "status":"healthy",
+  "service":"gait-emotion-recognition",
+  "version":"2.0.0",
+  "model":{
+    "mode":"trained",
+    "source":"artifact"
+  }
+}
 ```
 
 ### 감정 예측 확인 (`skeleton_data`)
@@ -230,7 +241,8 @@ curl -X POST "http://localhost:8000/predict_emotion" \
   }'
 ```
 
-예상: `emotion`, `confidence`, `probabilities` 등이 포함된 JSON 반환.
+예상: `emotion`, `confidence`, `probabilities`와 `model` 메타데이터가 포함된 JSON 반환.
+`model.mode`가 `trained`면 배포 모델, `fallback`이면 내장 데모 모델입니다.
 
 ---
 
@@ -285,17 +297,25 @@ docker-compose up --build
 - 포트: `8000:8000`
 
 현재 `docker-compose.yml`은 `src/`와 `models/`를 마운트합니다.
-즉, Docker 실행 시에도 **모델 파일 존재 여부가 매우 중요**합니다.
+즉, Docker 실행 시에도 모델 파일 상태에 따라 `trained`/`fallback` 모드가 자동 결정됩니다.
 
 ---
 
 ## 7) 데이터셋/모델/사전학습 파일 요구사항
 
-### API 실행에 반드시 필요한 파일
+### API 실행에 필요한 파일
 
 - `models/deployment/gait_emotion_api_model.joblib`
-  - API가 시작될 때 로드
-  - 없거나 손상되면 `POST /predict_emotion`에서 `503` 발생 가능
+  - API가 시작될 때 로드를 시도
+  - 없거나 손상되면 fallback 모델로 자동 전환되어 `POST /predict_emotion`은 계속 동작
+  - 어떤 모델이 쓰였는지는 `/health`와 `/predict_emotion`의 `model` 필드에서 확인 가능
+
+### fallback → 실제 모델 교체 방법
+
+1. 학습된 `joblib` 모델 파일을 `models/deployment/gait_emotion_api_model.joblib`에 배치합니다.
+2. 서버를 재시작합니다.
+3. `GET /health`에서 `model.mode`가 `trained`인지 확인합니다.
+4. 여전히 `fallback`이면 파일 손상/직렬화 호환성(`predict_proba` 지원 여부)을 점검합니다.
 
 ### 입력 데이터 형식 요구사항
 
@@ -330,20 +350,19 @@ docker-compose up --build
 - 가능하면 Python 3.10 또는 3.11 가상환경에서 먼저 재현하는 것을 권장합니다.
 - `mediapipe`가 꼭 필요하지 않다면, 핵심 API 실행은 `src/main.py` 기준으로 먼저 확인하세요.
 
-### Q2. `/predict_emotion`이 503을 반환합니다.
+### Q2. 어떤 모델로 추론 중인지 확인하고 싶습니다.
 
-가능한 원인:
-- `models/deployment/gait_emotion_api_model.joblib` 파일이 없음
-- 파일이 비어 있음
-- Git LFS로 내려받지 못함
-- 모델 파일은 있으나 손상됨
+확인 방법:
+- `GET /health` 또는 `POST /predict_emotion` 응답의 `model.mode` 확인
+- `trained`면 배포 모델 사용
+- `fallback`이면 내장 데모 모델 사용
 
 확인 항목:
 ```bash
 ls -lh models/deployment
 ```
 
-필요 시:
+실제 학습 모델로 전환하려면(선택):
 ```bash
 git lfs pull
 ```
@@ -372,7 +391,7 @@ git lfs pull
 
 1. **실제 실행 엔트리포인트는 `src.main:app` 입니다.**
 2. **`src/model.py`는 현재 공식 실행 경로로 보지 않는 것이 안전합니다.**
-3. **예측 API는 모델 파일이 있어야만 정상 동작합니다.**
+3. **예측 API는 fresh clone에서도 항상 동작하며, 모델 상태는 응답 메타데이터로 구분합니다.**
 4. **프론트엔드 웹캠 기능은 브라우저용 MediaPipe JS를 사용합니다.**
 5. **`scripts/`는 실험용 성격이 강하므로 README의 공식 실행 절차와 분리해서 이해해야 합니다.**
 
@@ -384,11 +403,13 @@ git lfs pull
 - `/predict_emotion`
 - `tests/` 기반 기본 검증
 - `frontend/` 정적 파일 서빙 및 API 호출 구조
+- fresh clone 환경에서도 fallback 모델을 통한 예측 응답(HTTP 200) 보장
 
 #### 🟡 추가 검토가 필요한 범위
 - 웹캠 기반 실제 추론 품질
 - 33개 관절 입력이 현재 모델 학습 조건과 얼마나 일치하는지
 - Docker 환경에서의 모델 파일/LFS 상태
+- `model.mode=fallback`일 때의 감정 분류 정확도(데모용 규칙 기반 확률)
 
 #### 🔴 이 README에서 실행 보장을 하지 않는 범위
 - `src/model.py` 직접 사용
@@ -408,7 +429,7 @@ git lfs pull
 ### 9-4. 이 섹션만 빠르게 보고 싶다면
 
 - **서버 실행 기준:** `src.main:app`
-- **필수 모델 파일:** `models/deployment/gait_emotion_api_model.joblib`
+- **권장 모델 파일:** `models/deployment/gait_emotion_api_model.joblib` (없으면 fallback 사용)
 - **공식 확인 경로:** `/health` → `/predict_emotion`
 - **프론트엔드 웹캠:** 브라우저 MediaPipe JS 기반
 - **주의할 파일:** `src/model.py`, `scripts/`
@@ -420,7 +441,7 @@ git lfs pull
 현재 저장소를 사용할 때 가장 중요한 결론은 다음과 같습니다.
 
 - **실행 기준은 `src/main.py`다.**
-- **예측 API는 모델 파일이 있어야 한다.**
+- **예측 API는 모델 파일이 없어도 fallback으로 동작한다(실모델 보장은 아님).**
 - **프론트엔드는 단순 정적 파일이지만, 웹캠 기능은 브라우저 MediaPipe JS에 의존한다.**
 - **`src/model.py`, `scripts/`는 현재 공식 실행 절차의 중심이 아니다.**
 
