@@ -7,6 +7,7 @@ API 테스트 코드
 from fastapi.testclient import TestClient
 from src.main import app
 import src.main as main_module
+from src.main import MODEL_PATH
 
 client = TestClient(app)
 
@@ -159,14 +160,24 @@ def test_predict_emotion_with_33_joint_skeleton_data():
 
 
 def test_predict_emotion_uses_fallback_model_when_configured(monkeypatch):
-    monkeypatch.setattr(main_module, "fusion_model", main_module.FallbackEmotionModel())
+    class TrackingFallbackModel(main_module.FallbackEmotionModel):
+        def __init__(self):
+            self.called = False
+
+        def predict_proba(self, X):
+            self.called = True
+            return super().predict_proba(X)
+
+    fallback_model = TrackingFallbackModel()
+
+    monkeypatch.setattr(main_module, "fusion_model", fallback_model)
     monkeypatch.setattr(
         main_module,
         "model_runtime_info",
         {
             "mode": "fallback",
             "source": "in_repo_demo",
-            "path": "models/deployment/gait_emotion_api_model.joblib",
+            "path": MODEL_PATH,
             "n_features_in": 14,
             "fallback_reason": "test override",
         },
@@ -184,6 +195,7 @@ def test_predict_emotion_uses_fallback_model_when_configured(monkeypatch):
     data = response.json()
     assert data["model"]["mode"] == "fallback"
     assert data["model"]["source"] == "in_repo_demo"
+    assert fallback_model.called is True
 
 
 def test_cors_preflight_endpoint():

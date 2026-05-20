@@ -61,15 +61,17 @@ class FallbackEmotionModel:
         mean_val = np.mean(arr, axis=1)
         std_val = np.std(arr, axis=1)
         energy = np.linalg.norm(arr, axis=1)
-        lead = np.abs(arr[:, 0]) if arr.shape[1] > 0 else np.zeros(arr.shape[0])
+        first_feature_magnitude = np.abs(arr[:, 0])
 
+        # Heuristic coefficients for demo fallback only (not trained weights):
+        # combine simple motion statistics into a stable 6-class probability output.
         logits = np.stack(
             [
                 0.5 * mean_val + 0.2 * std_val,      # happy
                 -0.4 * mean_val + 0.3 * std_val,     # sad
                 0.2 * energy + 0.1 * std_val,        # fear
                 -0.2 * energy + 0.3 * std_val,       # disgust
-                0.2 * lead - 0.1 * mean_val,         # angry
+                0.2 * first_feature_magnitude - 0.1 * mean_val,  # angry
                 np.full(arr.shape[0], 0.1),          # neutral
             ],
             axis=1,

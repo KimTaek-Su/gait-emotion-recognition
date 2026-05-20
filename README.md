@@ -160,7 +160,7 @@ gait-emotion-recognition/
 - (선택) Docker / Docker Compose
 
 모델 파일이 LFS로 관리되는 경우를 대비해, 아래 명령을 권장합니다.
-fallback이 있어도 실제 학습 모델 추론을 원하면 LFS 파일을 정상 확보해야 합니다.
+실제 학습 모델로 추론하려면, fallback 모드여도 LFS 파일을 정상적으로 확보해야 합니다.
 
 ```bash
 git lfs install
