@@ -4,10 +4,12 @@ API 테스트 코드
 현재 src.main 구현 기준으로 FastAPI 엔드포인트를 테스트합니다.
 """
 
-from fastapi.testclient import TestClient
-from src.main import app
+import os
 
-client = TestClient(app)
+from fastapi.testclient import TestClient
+import src.main as main_module
+
+client = TestClient(main_module.app)
 
 
 # 17개 관절 x 5프레임 더미 skeleton_data 생성
@@ -23,6 +25,17 @@ def build_valid_skeleton_data(n_frames: int = 5, n_joints: int = 17):
     return skeleton_data
 
 
+def validate_model_metadata(model_data):
+    assert isinstance(model_data, dict)
+    assert model_data.get("mode") in ["trained", "fallback"]
+    assert isinstance(model_data.get("source"), str)
+    assert model_data["source"]
+    assert isinstance(model_data.get("path"), str)
+    assert model_data["path"] == main_module.MODEL_ABS_PATH
+    if model_data.get("mode") == "trained":
+        assert os.path.exists(model_data["path"])
+
+
 def test_health_endpoint():
     response = client.get("/health")
     assert response.status_code == 200
@@ -30,6 +43,8 @@ def test_health_endpoint():
     assert data["status"] == "healthy"
     assert data["service"] == "gait-emotion-recognition"
     assert data["version"] == "2.0.0"
+    assert "model" in data
+    validate_model_metadata(data["model"])
 
 
 def test_predict_emotion_with_valid_skeleton_data():
@@ -41,24 +56,21 @@ def test_predict_emotion_with_valid_skeleton_data():
         },
     )
 
-    # 모델이 정상 로드되면 200, 없으면 503
-    assert response.status_code in [200, 503]
+    assert response.status_code == 200
     data = response.json()
 
-    if response.status_code == 200:
-        assert "emotion" in data
-        assert "confidence" in data
-        assert "confidence_level" in data
-        assert "probabilities" in data
-        assert "features" in data
-        assert "message" in data
-        assert isinstance(data["emotion"], str)
-        assert 0 <= data["confidence"] <= 1
-        assert data["confidence_level"] in ["high", "medium", "low"]
-        assert len(data["features"]) >= 14
-    else:
-        assert "detail" in data
-        assert "모델 파일 로드 실패" in data["detail"]
+    assert "emotion" in data
+    assert "confidence" in data
+    assert "confidence_level" in data
+    assert "probabilities" in data
+    assert "features" in data
+    assert "message" in data
+    assert "model" in data
+    assert isinstance(data["emotion"], str)
+    assert 0 <= data["confidence"] <= 1
+    assert data["confidence_level"] in ["high", "medium", "low"]
+    assert len(data["features"]) >= 14
+    validate_model_metadata(data["model"])
 
 
 def test_predict_emotion_with_minimal_skeleton_data_padding_case():
@@ -70,14 +82,12 @@ def test_predict_emotion_with_minimal_skeleton_data_padding_case():
         },
     )
 
-    assert response.status_code in [200, 503]
+    assert response.status_code == 200
     data = response.json()
-
-    if response.status_code == 200:
-        assert "features" in data
-        assert len(data["features"]) >= 14
-    else:
-        assert "detail" in data
+    assert "features" in data
+    assert len(data["features"]) >= 14
+    assert "model" in data
+    validate_model_metadata(data["model"])
 
 
 def test_predict_emotion_with_invalid_skeleton_data_format():
@@ -135,15 +145,13 @@ def test_predict_emotion_with_valid_keypoints_array():
         },
     )
 
-    assert response.status_code in [200, 503]
+    assert response.status_code == 200
     data = response.json()
-
-    if response.status_code == 200:
-        assert "emotion" in data
-        assert "features" in data
-        assert len(data["features"]) >= 14
-    else:
-        assert "detail" in data
+    assert "emotion" in data
+    assert "features" in data
+    assert len(data["features"]) >= 14
+    assert "model" in data
+    validate_model_metadata(data["model"])
 
 
 def test_predict_emotion_with_33_joint_skeleton_data():
@@ -161,9 +169,33 @@ def test_predict_emotion_with_33_joint_skeleton_data():
         json={"skeleton_data": skeleton_data, "n_joints": 33},
     )
 
-    assert response.status_code in [200, 503]
+    assert response.status_code == 200
     data = response.json()
-    assert "detail" in data or "emotion" in data
+    assert "emotion" in data
+    assert "model" in data
+    validate_model_metadata(data["model"])
+
+
+def test_predict_emotion_fallback_mode_is_explicit(monkeypatch):
+    monkeypatch.setattr(main_module, "fusion_model", main_module.FallbackPredictor())
+    monkeypatch.setattr(
+        main_module,
+        "model_runtime",
+        main_module.get_model_runtime_metadata("fallback", "in-repo-default"),
+    )
+
+    response = client.post(
+        "/predict_emotion",
+        json={
+            "skeleton_data": build_valid_skeleton_data(),
+            "n_joints": 17,
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["model"]["mode"] == "fallback"
+    assert data["model"]["source"] == "in-repo-default"
 
 
 def test_cors_preflight_endpoint():

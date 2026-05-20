@@ -158,6 +158,34 @@ function showLoading() {
     resultSection.classList.add('show');
 }
 
+function updateModelStatus(model) {
+    const statusEl = document.getElementById('modelStatus');
+    if (!statusEl) return;
+
+    statusEl.className = 'model-status neutral';
+    if (!model || typeof model !== 'object' || Array.isArray(model)) {
+        statusEl.textContent = '모델 상태 정보가 아직 제공되지 않았습니다.';
+        return;
+    }
+
+    const mode = typeof model.mode === 'string' ? model.mode : 'unknown';
+    const source = model.source || 'unknown';
+
+    if (mode === 'trained') {
+        statusEl.className = 'model-status trained';
+        statusEl.textContent = `✅ 현재 모델: trained (source: ${source})`;
+        return;
+    }
+
+    if (mode === 'fallback') {
+        statusEl.className = 'model-status fallback';
+        statusEl.textContent = `⚠️ 현재 모델: fallback/demo (source: ${source})`;
+        return;
+    }
+
+    statusEl.textContent = `현재 모델 모드를 확인할 수 없습니다 (source: ${source})`;
+}
+
 /**
  * 입력 검증/변환 및 감정 예측 API 호출 (textarea)
  */
@@ -195,7 +223,9 @@ async function predictEmotion() {
             }
             throw new Error(msg);
         }
-        displayResult(await response.json());
+        const data = await response.json();
+        displayResult(data);
+        updateModelStatus(data.model);
     } catch (error) {
         console.error('Error:', error);
         displayError(`오류가 발생했습니다: ${error.message}`);
@@ -218,12 +248,16 @@ async function testConnection() {
         const response = await fetch(`${API_URL}/health`);
         if (response.ok) {
             console.log('✅ API 서버 연결 성공');
+            const health = await response.json();
+            updateModelStatus(health.model);
         } else {
             console.warn('⚠️ API 서버 응답 이상');
+            updateModelStatus(null);
         }
     } catch (error) {
         console.error('❌ API 서버 연결 실패:', error.message);
         console.log('API URL을 확인하세요:', API_URL);
+        updateModelStatus(null);
     }
 }
 testConnection();
@@ -363,7 +397,9 @@ async function analyzeFromWebcam() {
             const errorData = await response.json();
             throw new Error(errorData.detail || '서버 오류');
         }
-        displayResult(await response.json());
+        const data = await response.json();
+        displayResult(data);
+        updateModelStatus(data.model);
         console.log('✅ 분석 완료');
     } catch (error) {
         console.error('❌ 분석 실패:', error);

@@ -1,4 +1,4 @@
-from typing import List
+from typing import Any, Dict, List
 
 import joblib
 import numpy as np
@@ -10,9 +10,12 @@ from fastapi.middleware.cors import CORSMiddleware
 
 APP_VERSION = "2.0.0"
 MODEL_PATH = os.path.join("models", "deployment", "gait_emotion_api_model.joblib")
+MODEL_ABS_PATH = os.path.abspath(MODEL_PATH)
 DEFAULT_KEYPOINT_JOINTS = 13
 DEFAULT_SKELETON_JOINTS = 17
 EMOTION_LABELS = ["happy", "sad", "fear", "disgust", "angry", "neutral"]
+# Lightly neutral-weighted fixed baseline for demo-mode predictions.
+FALLBACK_EMOTION_DISTRIBUTION = np.array([0.24, 0.15, 0.12, 0.1, 0.14, 0.25], dtype=float)
 
 
 app = FastAPI(
@@ -45,6 +48,8 @@ async def preflight():
 def load_model():
     try:
         model = joblib.load(MODEL_PATH)
+        if not hasattr(model, "predict_proba"):
+            raise ValueError("predict_proba 메서드가 없는 모델입니다.")
         print("[MODEL] loaded from:", os.path.abspath(MODEL_PATH))
         print("[MODEL] expected n_features_in_ =", getattr(model, "n_features_in_", None))
         return model
@@ -53,7 +58,39 @@ def load_model():
         return None
 
 
-fusion_model = load_model()
+class FallbackPredictor:
+    def __init__(self, n_features: int = 14):
+        self.n_features_in_ = n_features
+
+    def predict_proba(self, X):
+        arr = np.array(X, dtype=float)
+        if arr.ndim == 1:
+            arr = arr.reshape(1, -1)
+        probs = FALLBACK_EMOTION_DISTRIBUTION
+        # Keep normalization as a guard if distribution values are changed later.
+        probs = probs / probs.sum()
+        return np.tile(probs, (arr.shape[0], 1))
+
+
+def get_model_runtime_metadata(model_mode: str, model_source: str) -> Dict[str, Any]:
+    return {
+        "mode": model_mode,
+        "source": model_source,
+        "path": MODEL_ABS_PATH,
+    }
+
+
+def load_runtime_predictor():
+    model = load_model()
+    if model is not None:
+        return model, get_model_runtime_metadata("trained", "joblib")
+
+    fallback_model = FallbackPredictor()
+    print("[MODEL] fallback predictor enabled")
+    return fallback_model, get_model_runtime_metadata("fallback", "in-repo-default")
+
+
+fusion_model, model_runtime = load_runtime_predictor()
 
 
 try:
@@ -70,6 +107,7 @@ async def health():
         "status": "healthy",
         "service": "gait-emotion-recognition",
         "version": APP_VERSION,
+        "model": model_runtime,
     }
 
 
@@ -145,9 +183,6 @@ async def predict_emotion_endpoint(request: dict):
     except Exception as e:
         raise HTTPException(status_code=422, detail=f"특징 추출 실패: {e}")
 
-    if fusion_model is None:
-        raise HTTPException(status_code=503, detail="모델 파일 로드 실패. 서버 점검 필요.")
-
     try:
         features = pad_features_if_needed(features, fusion_model)
     except Exception as e:
@@ -177,4 +212,5 @@ async def predict_emotion_endpoint(request: dict):
         "features": features,
         "features_shape": list(X.shape),
         "message": "감정이 성공적으로 예측되었습니다.",
+        "model": model_runtime,
     }
