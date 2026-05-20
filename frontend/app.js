@@ -97,7 +97,28 @@ function parseKeypointsForServer(origKeypoints) {
     return null;
 }
 
-// 감정 결과/에러 안내 등 출력 유틸리티
+/**
+ * Render the active backend model mode into the #modelStatus badge.
+ * @param {Object|null|undefined} modelInfo  – the `model` field from /health or /predict_emotion
+ */
+function renderModelStatus(modelInfo) {
+    const el = document.getElementById('modelStatus');
+    if (!el) return;
+    if (!modelInfo || !modelInfo.mode) {
+        el.className = 'model-status unavailable';
+        el.textContent = '⚪ 모델 상태 확인 불가';
+        return;
+    }
+    if (modelInfo.mode === 'trained') {
+        el.className = 'model-status trained';
+        el.textContent = '✅ 학습된 모델 로드됨';
+    } else {
+        // fallback or any other unknown mode
+        el.className = 'model-status fallback';
+        el.textContent = '⚠️ 데모 모드: 저장소 내장 fallback 모델 사용 중';
+    }
+}
+
 function getEmotionIcon(emotion) {
     const icons = { happy:'😊', sad:'😢', fear:'😨', disgust:'🤢', angry:'😠', neutral:'😐' };
     return icons[emotion?.toLowerCase()] || '😐';
@@ -111,6 +132,7 @@ function getConfidenceLevelLabel(level) {
     return labels[level] || level;
 }
 function displayResult(data) {
+    if (data.model !== undefined) renderModelStatus(data.model);
     const resultSection = document.getElementById('resultSection');
     let html = `
         <div class="emotion-result">
@@ -217,11 +239,15 @@ async function testConnection() {
     try {
         const response = await fetch(`${API_URL}/health`);
         if (response.ok) {
+            const data = await response.json();
+            renderModelStatus(data.model);
             console.log('✅ API 서버 연결 성공');
         } else {
+            renderModelStatus(null);
             console.warn('⚠️ API 서버 응답 이상');
         }
     } catch (error) {
+        renderModelStatus(null);
         console.error('❌ API 서버 연결 실패:', error.message);
         console.log('API URL을 확인하세요:', API_URL);
     }
