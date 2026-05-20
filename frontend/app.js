@@ -163,7 +163,7 @@ function updateModelStatus(model) {
     if (!statusEl) return;
 
     statusEl.className = 'model-status neutral';
-    if (!model || typeof model !== 'object') {
+    if (!model || typeof model !== 'object' || Array.isArray(model)) {
         statusEl.textContent = '모델 상태 정보가 아직 제공되지 않았습니다.';
         return;
     }

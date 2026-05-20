@@ -4,6 +4,8 @@ API 테스트 코드
 현재 src.main 구현 기준으로 FastAPI 엔드포인트를 테스트합니다.
 """
 
+import os
+
 from fastapi.testclient import TestClient
 import src.main as main_module
 
@@ -30,6 +32,8 @@ def validate_model_metadata(model_data):
     assert model_data["source"]
     assert isinstance(model_data.get("path"), str)
     assert model_data["path"] == main_module.MODEL_ABS_PATH
+    if model_data.get("mode") == "trained":
+        assert os.path.exists(model_data["path"])
 
 
 def test_health_endpoint():
