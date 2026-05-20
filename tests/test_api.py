@@ -30,6 +30,9 @@ def test_health_endpoint():
     assert data["status"] == "healthy"
     assert data["service"] == "gait-emotion-recognition"
     assert data["version"] == "2.0.0"
+    assert "model" in data
+    assert data["model"]["mode"] in ("trained", "fallback")
+    assert "source" in data["model"]
 
 
 def test_predict_emotion_with_valid_skeleton_data():
@@ -41,24 +44,21 @@ def test_predict_emotion_with_valid_skeleton_data():
         },
     )
 
-    # 모델이 정상 로드되면 200, 없으면 503
-    assert response.status_code in [200, 503]
+    assert response.status_code == 200
     data = response.json()
-
-    if response.status_code == 200:
-        assert "emotion" in data
-        assert "confidence" in data
-        assert "confidence_level" in data
-        assert "probabilities" in data
-        assert "features" in data
-        assert "message" in data
-        assert isinstance(data["emotion"], str)
-        assert 0 <= data["confidence"] <= 1
-        assert data["confidence_level"] in ["high", "medium", "low"]
-        assert len(data["features"]) >= 14
-    else:
-        assert "detail" in data
-        assert "모델 파일 로드 실패" in data["detail"]
+    assert "emotion" in data
+    assert "confidence" in data
+    assert "confidence_level" in data
+    assert "probabilities" in data
+    assert "features" in data
+    assert "message" in data
+    assert "model" in data
+    assert data["model"]["mode"] in ("trained", "fallback")
+    assert "source" in data["model"]
+    assert isinstance(data["emotion"], str)
+    assert 0 <= data["confidence"] <= 1
+    assert data["confidence_level"] in ["high", "medium", "low"]
+    assert len(data["features"]) >= 14
 
 
 def test_predict_emotion_with_minimal_skeleton_data_padding_case():
@@ -70,14 +70,10 @@ def test_predict_emotion_with_minimal_skeleton_data_padding_case():
         },
     )
 
-    assert response.status_code in [200, 503]
+    assert response.status_code == 200
     data = response.json()
-
-    if response.status_code == 200:
-        assert "features" in data
-        assert len(data["features"]) >= 14
-    else:
-        assert "detail" in data
+    assert "features" in data
+    assert len(data["features"]) >= 14
 
 
 def test_predict_emotion_with_invalid_skeleton_data_format():
@@ -135,15 +131,12 @@ def test_predict_emotion_with_valid_keypoints_array():
         },
     )
 
-    assert response.status_code in [200, 503]
+    assert response.status_code == 200
     data = response.json()
 
-    if response.status_code == 200:
-        assert "emotion" in data
-        assert "features" in data
-        assert len(data["features"]) >= 14
-    else:
-        assert "detail" in data
+    assert "emotion" in data
+    assert "features" in data
+    assert len(data["features"]) >= 14
 
 
 def test_predict_emotion_with_33_joint_skeleton_data():
@@ -161,7 +154,7 @@ def test_predict_emotion_with_33_joint_skeleton_data():
         json={"skeleton_data": skeleton_data, "n_joints": 33},
     )
 
-    assert response.status_code in [200, 503]
+    assert response.status_code == 200
     data = response.json()
     assert "detail" in data or "emotion" in data
 

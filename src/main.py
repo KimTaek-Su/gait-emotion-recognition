@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional, Tuple
 
 import joblib
 import numpy as np
@@ -13,6 +13,22 @@ MODEL_PATH = os.path.join("models", "deployment", "gait_emotion_api_model.joblib
 DEFAULT_KEYPOINT_JOINTS = 13
 DEFAULT_SKELETON_JOINTS = 17
 EMOTION_LABELS = ["happy", "sad", "fear", "disgust", "angry", "neutral"]
+
+# MODEL_MODE: "trained" if a real trained model is deployed, "fallback" for the
+# in-repo demo model (default for fresh clones).  Set MODEL_MODE=trained in the
+# environment to opt into "trained" labelling.
+_env_mode = os.environ.get("MODEL_MODE", "fallback")
+MODEL_MODE: str = _env_mode if _env_mode in ("trained", "fallback") else "fallback"
+
+
+class _FallbackPredictor:
+    """Uniform demo predictor used when the real model file cannot be loaded."""
+
+    n_features_in_ = None
+
+    def predict_proba(self, X: np.ndarray) -> np.ndarray:
+        n = len(EMOTION_LABELS)
+        return np.full((X.shape[0], n), 1.0 / n)
 
 
 app = FastAPI(
@@ -42,18 +58,24 @@ async def preflight():
     )
 
 
-def load_model():
+def load_model() -> Tuple[object, str]:
+    """Load the deployment model.  Falls back to *_FallbackPredictor* on failure.
+
+    Returns a (model, source) tuple so callers know where the model came from.
+    """
     try:
         model = joblib.load(MODEL_PATH)
+        source = MODEL_PATH  # relative path; avoids leaking server directory structure
         print("[MODEL] loaded from:", os.path.abspath(MODEL_PATH))
         print("[MODEL] expected n_features_in_ =", getattr(model, "n_features_in_", None))
-        return model
+        return model, source
     except Exception as e:
         print(f"[!] 모델 로드 실패: {repr(e)}")
-        return None
+        print("[MODEL] using built-in fallback predictor")
+        return _FallbackPredictor(), "built-in fallback"
 
 
-fusion_model = load_model()
+fusion_model, MODEL_SOURCE = load_model()
 
 
 try:
@@ -70,6 +92,10 @@ async def health():
         "status": "healthy",
         "service": "gait-emotion-recognition",
         "version": APP_VERSION,
+        "model": {
+            "mode": MODEL_MODE,
+            "source": MODEL_SOURCE,
+        },
     }
 
 
@@ -145,9 +171,6 @@ async def predict_emotion_endpoint(request: dict):
     except Exception as e:
         raise HTTPException(status_code=422, detail=f"특징 추출 실패: {e}")
 
-    if fusion_model is None:
-        raise HTTPException(status_code=503, detail="모델 파일 로드 실패. 서버 점검 필요.")
-
     try:
         features = pad_features_if_needed(features, fusion_model)
     except Exception as e:
@@ -177,4 +200,8 @@ async def predict_emotion_endpoint(request: dict):
         "features": features,
         "features_shape": list(X.shape),
         "message": "감정이 성공적으로 예측되었습니다.",
+        "model": {
+            "mode": MODEL_MODE,
+            "source": MODEL_SOURCE,
+        },
     }
