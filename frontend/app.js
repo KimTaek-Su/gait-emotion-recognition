@@ -169,7 +169,7 @@ function updateModelStatus(model) {
     }
 
     const mode = typeof model.mode === 'string' ? model.mode : 'unknown';
-    const source = model.source || model.path || 'unknown';
+    const source = model.source || 'unknown';
 
     if (mode === 'trained') {
         statusEl.className = 'model-status trained';
@@ -184,20 +184,6 @@ function updateModelStatus(model) {
     }
 
     statusEl.textContent = `현재 모델 모드를 확인할 수 없습니다 (source: ${source})`;
-}
-
-async function refreshModelStatusFromHealth() {
-    try {
-        const response = await fetch(`${API_URL}/health`);
-        if (!response.ok) {
-            updateModelStatus(null);
-            return;
-        }
-        const health = await response.json();
-        updateModelStatus(health.model);
-    } catch (error) {
-        updateModelStatus(null);
-    }
 }
 
 /**
@@ -275,7 +261,6 @@ async function testConnection() {
     }
 }
 testConnection();
-refreshModelStatusFromHealth();
 
 /**
  * skeleton_data 변환 및 웹캠 분석 루틴(원본 유지)

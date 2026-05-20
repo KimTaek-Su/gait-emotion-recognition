@@ -14,6 +14,7 @@ MODEL_ABS_PATH = os.path.abspath(MODEL_PATH)
 DEFAULT_KEYPOINT_JOINTS = 13
 DEFAULT_SKELETON_JOINTS = 17
 EMOTION_LABELS = ["happy", "sad", "fear", "disgust", "angry", "neutral"]
+FALLBACK_EMOTION_DISTRIBUTION = np.array([0.24, 0.15, 0.12, 0.1, 0.14, 0.25], dtype=float)
 
 
 app = FastAPI(
@@ -64,7 +65,7 @@ class FallbackPredictor:
         arr = np.array(X, dtype=float)
         if arr.ndim == 1:
             arr = arr.reshape(1, -1)
-        probs = np.array([0.24, 0.15, 0.12, 0.1, 0.14, 0.25], dtype=float)
+        probs = FALLBACK_EMOTION_DISTRIBUTION
         probs = probs / probs.sum()
         return np.tile(probs, (arr.shape[0], 1))
 

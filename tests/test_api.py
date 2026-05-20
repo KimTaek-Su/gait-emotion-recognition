@@ -23,13 +23,13 @@ def build_valid_skeleton_data(n_frames: int = 5, n_joints: int = 17):
     return skeleton_data
 
 
-def assert_model_metadata(model_data):
+def validate_model_metadata(model_data):
     assert isinstance(model_data, dict)
     assert model_data.get("mode") in ["trained", "fallback"]
     assert isinstance(model_data.get("source"), str)
     assert model_data["source"]
     assert isinstance(model_data.get("path"), str)
-    assert model_data["path"].endswith("models/deployment/gait_emotion_api_model.joblib")
+    assert model_data["path"] == main_module.MODEL_ABS_PATH
 
 
 def test_health_endpoint():
@@ -40,7 +40,7 @@ def test_health_endpoint():
     assert data["service"] == "gait-emotion-recognition"
     assert data["version"] == "2.0.0"
     assert "model" in data
-    assert_model_metadata(data["model"])
+    validate_model_metadata(data["model"])
 
 
 def test_predict_emotion_with_valid_skeleton_data():
@@ -66,7 +66,7 @@ def test_predict_emotion_with_valid_skeleton_data():
     assert 0 <= data["confidence"] <= 1
     assert data["confidence_level"] in ["high", "medium", "low"]
     assert len(data["features"]) >= 14
-    assert_model_metadata(data["model"])
+    validate_model_metadata(data["model"])
 
 
 def test_predict_emotion_with_minimal_skeleton_data_padding_case():
@@ -83,7 +83,7 @@ def test_predict_emotion_with_minimal_skeleton_data_padding_case():
     assert "features" in data
     assert len(data["features"]) >= 14
     assert "model" in data
-    assert_model_metadata(data["model"])
+    validate_model_metadata(data["model"])
 
 
 def test_predict_emotion_with_invalid_skeleton_data_format():
@@ -147,7 +147,7 @@ def test_predict_emotion_with_valid_keypoints_array():
     assert "features" in data
     assert len(data["features"]) >= 14
     assert "model" in data
-    assert_model_metadata(data["model"])
+    validate_model_metadata(data["model"])
 
 
 def test_predict_emotion_with_33_joint_skeleton_data():
@@ -169,7 +169,7 @@ def test_predict_emotion_with_33_joint_skeleton_data():
     data = response.json()
     assert "emotion" in data
     assert "model" in data
-    assert_model_metadata(data["model"])
+    validate_model_metadata(data["model"])
 
 
 def test_predict_emotion_fallback_mode_is_explicit(monkeypatch):
@@ -177,7 +177,7 @@ def test_predict_emotion_fallback_mode_is_explicit(monkeypatch):
     monkeypatch.setattr(
         main_module,
         "model_runtime",
-        main_module.get_model_runtime_metadata("fallback", "test-fallback"),
+        main_module.get_model_runtime_metadata("fallback", "in-repo-default"),
     )
 
     response = client.post(
@@ -191,7 +191,7 @@ def test_predict_emotion_fallback_mode_is_explicit(monkeypatch):
     assert response.status_code == 200
     data = response.json()
     assert data["model"]["mode"] == "fallback"
-    assert data["model"]["source"] == "test-fallback"
+    assert data["model"]["source"] == "in-repo-default"
 
 
 def test_cors_preflight_endpoint():
