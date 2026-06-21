@@ -245,17 +245,17 @@ python -m pytest -q
 
 ---
 
-## 6-5. 프론트엔드 실행 (정적 파일)
+## 6-5. 프론트엔드 실행
 
-`frontend/`는 별도 빌드 도구 없이 정적 파일로 구성되어 있습니다.
+이제 `frontend/`는 `src.main:app`이 직접 서빙합니다.
 
-```bash
-cd frontend
-python -m http.server 5500
-```
+- 기본 접속 주소: `http://localhost:8000/`
+- API 문서: `http://localhost:8000/docs`
+- 헬스체크: `http://localhost:8000/health`
 
-브라우저에서 `http://localhost:5500` 접속 후,
-백엔드(`http://localhost:8000`)가 켜져 있어야 API 호출이 동작합니다.
+즉, 서버를 띄운 뒤에는 별도 정적 서버 없이 브라우저에서 바로 데모 UI를 사용할 수 있습니다.
+
+필요하면 여전히 `frontend/index.html`을 따로 열어 로컬 프론트만 확인할 수 있습니다. 이 경우에만 프런트엔드는 자동으로 `http://localhost:8000`를 API 주소로 사용합니다.
 
 ### 프론트엔드 사용 방식 2가지
 
@@ -272,6 +272,7 @@ python -m http.server 5500
 - 프론트엔드 웹캠 기능은 **브라우저의 MediaPipe JavaScript**를 사용합니다.
 - 이것은 `requirements.txt`에 들어가는 **Python 패키지 `mediapipe`와 별개**입니다.
 - 따라서 Python 3.12에서 `mediapipe`를 기본 설치하지 않더라도, 브라우저 데모 자체는 동작할 수 있습니다.
+- 배포 환경에서는 프런트엔드가 현재 호스트 기준으로 같은 서버의 `/predict_emotion` API를 자동 호출합니다.
 
 ---
 
@@ -283,9 +284,25 @@ docker-compose up --build
 
 - 기본적으로 `uvicorn src.main:app` 실행
 - 포트: `8000:8000`
+- 접속 주소: `http://localhost:8000/`
 
 현재 `docker-compose.yml`은 `src/`와 `models/`를 마운트합니다.
 즉, Docker 실행 시에도 **모델 파일 존재 여부가 매우 중요**합니다.
+
+## 6-7. 웹 영구 배포 (Render 권장)
+
+이 저장소는 이제 단일 Docker 웹 서비스로 배포할 수 있습니다. `render.yaml`이 포함되어 있으므로 Render에서 저장소를 연결하면 `/health`를 기준으로 배포 상태를 확인할 수 있습니다.
+
+1. 저장소를 GitHub 등에 push합니다.
+2. Render에서 **Blueprint** 또는 **New Web Service**로 저장소를 연결합니다.
+3. `Dockerfile`을 그대로 사용해 배포합니다.
+4. 서비스가 올라오면 배포 URL의 `/`에서 웹 UI, `/docs`에서 API 문서를 확인합니다.
+
+주의:
+- 무료 플랜은 슬립이 있으므로 “영구적으로 항상 켜진” 배포를 원하면 유료 플랜을 사용해야 합니다.
+- `models/deployment/gait_emotion_api_model.joblib`가 저장소 또는 빌드 컨텍스트에 반드시 포함되어야 합니다.
+
+상세 단계는 `docs/WEB_DEPLOYMENT.md`를 참고하세요.
 
 ---
 

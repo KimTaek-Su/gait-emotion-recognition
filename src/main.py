@@ -1,15 +1,18 @@
+from pathlib import Path
 from typing import List
 
 import joblib
 import numpy as np
-import os
 
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 
 APP_VERSION = "2.0.0"
-MODEL_PATH = os.path.join("models", "deployment", "gait_emotion_api_model.joblib")
+BASE_DIR = Path(__file__).resolve().parent.parent
+MODEL_PATH = BASE_DIR / "models" / "deployment" / "gait_emotion_api_model.joblib"
+FRONTEND_DIR = BASE_DIR / "frontend"
 DEFAULT_KEYPOINT_JOINTS = 13
 DEFAULT_SKELETON_JOINTS = 17
 EMOTION_LABELS = ["happy", "sad", "fear", "disgust", "angry", "neutral"]
@@ -45,7 +48,7 @@ async def preflight():
 def load_model():
     try:
         model = joblib.load(MODEL_PATH)
-        print("[MODEL] loaded from:", os.path.abspath(MODEL_PATH))
+        print("[MODEL] loaded from:", MODEL_PATH.resolve())
         print("[MODEL] expected n_features_in_ =", getattr(model, "n_features_in_", None))
         return model
     except Exception as e:
@@ -178,3 +181,7 @@ async def predict_emotion_endpoint(request: dict):
         "features_shape": list(X.shape),
         "message": "감정이 성공적으로 예측되었습니다.",
     }
+
+
+if FRONTEND_DIR.is_dir():
+    app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")

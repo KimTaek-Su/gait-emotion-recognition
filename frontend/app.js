@@ -3,7 +3,13 @@
  * 다양한 keypoints 구조를 서버 요구대로 자동 변환 + 예외·안내 강화
  */
 
-const API_URL = 'http://localhost:8000';
+const API_URL = window.GAIT_API_URL || (
+    window.location.protocol === 'file:' ? 'http://localhost:8000' : ''
+);
+
+function buildApiUrl(path) {
+    return `${API_URL}${path}`;
+}
 
 const MEDIAPIPE_TO_17_JOINTS = [
     0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28, 5, 2, 7, 8
@@ -180,7 +186,7 @@ async function predictEmotion() {
     predictBtn.disabled = true;
     showLoading();
     try {
-        const response = await fetch(`${API_URL}/predict_emotion`, {
+        const response = await fetch(buildApiUrl('/predict_emotion'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ keypoints: parsedKeypoints })
@@ -215,7 +221,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 async function testConnection() {
     try {
-        const response = await fetch(`${API_URL}/health`);
+        const response = await fetch(buildApiUrl('/health'));
         if (response.ok) {
             console.log('✅ API 서버 연결 성공');
         } else {
@@ -354,7 +360,7 @@ async function analyzeFromWebcam() {
 
     try {
         // Use the collected skeleton data for analysis
-        const response = await fetch(`${API_URL}/predict_emotion`, {
+        const response = await fetch(buildApiUrl('/predict_emotion'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ skeleton_data: formattedData, n_joints: numJoints })

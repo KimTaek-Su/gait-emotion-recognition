@@ -1,0 +1,17 @@
+.git
+.gitignore
+.venv
+.copilot-venv
+__pycache__
+.pytest_cache
+
+outputs
+plots
+videos
+docs
+configs
+evaluation
+scripts
+tests
+
+models/research

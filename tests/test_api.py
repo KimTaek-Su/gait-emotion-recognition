@@ -32,6 +32,19 @@ def test_health_endpoint():
     assert data["version"] == "2.0.0"
 
 
+def test_frontend_index_is_served_from_root():
+    response = client.get("/")
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+    assert "걸음걸이 감정 인식" in response.text
+
+
+def test_frontend_javascript_is_served():
+    response = client.get("/app.js")
+    assert response.status_code == 200
+    assert "buildApiUrl" in response.text
+
+
 def test_predict_emotion_with_valid_skeleton_data():
     response = client.post(
         "/predict_emotion",

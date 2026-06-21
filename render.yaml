@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: gait-emotion-recognition
+    runtime: docker
+    plan: free
+    branch: main
+    dockerfilePath: ./Dockerfile
+    autoDeployTrigger: commit
+    healthCheckPath: /health
