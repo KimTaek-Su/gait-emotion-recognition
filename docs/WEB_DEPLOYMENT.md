@@ -46,6 +46,18 @@ Then open `http://localhost:8000/`.
 - The deployed service depends on `models/deployment/gait_emotion_api_model.joblib`.
 - The browser webcam flow uses MediaPipe JavaScript from CDN.
 - Unknown large artifacts are excluded from the Docker build context through `.dockerignore` to keep cloud builds smaller and faster.
+- The Blueprint can provision a Render Postgres instance and inject `DATABASE_URL` into the web service for prediction log storage.
+
+## Prediction log storage
+
+The API can persist one structured log row per `POST /predict_emotion` request.
+
+- The default Blueprint now creates `gait-emotion-recognition-db` and wires its private-network connection string to `DATABASE_URL`.
+- On first use, the app creates a `prediction_logs` table automatically.
+- Each row stores request metadata, frame/joint counts, prediction result, confidence, latency, and error details.
+- Only a preview of incoming keypoints or skeleton data is stored, not the full raw sequence.
+
+If you already deployed the web service before this change, sync the updated Blueprint in Render so the database resource and `DATABASE_URL` binding are created.
 
 ## Local helper scripts
 

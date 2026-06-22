@@ -4,6 +4,8 @@ API 테스트 코드
 현재 src.main 구현 기준으로 FastAPI 엔드포인트를 테스트합니다.
 """
 
+import numpy as np
+
 from fastapi.testclient import TestClient
 from src.main import app
 
@@ -30,6 +32,7 @@ def test_health_endpoint():
     assert data["status"] == "healthy"
     assert data["service"] == "gait-emotion-recognition"
     assert data["version"] == "2.0.0"
+    assert "prediction_logging" in data
 
 
 def test_frontend_index_is_served_from_root():
@@ -189,3 +192,74 @@ def test_cors_preflight_endpoint():
     )
 
     assert response.status_code == 200
+
+
+class DummyPredictionLogStore:
+    def __init__(self):
+        self.calls = []
+
+    def save_prediction(self, **kwargs):
+        self.calls.append(kwargs)
+        return True
+
+
+class DummyModel:
+    n_features_in_ = 4
+
+    def predict_proba(self, X):
+        return np.array([[0.72, 0.08, 0.05, 0.05, 0.04, 0.06]], dtype=float)
+
+
+def test_successful_prediction_is_logged(monkeypatch):
+    dummy_store = DummyPredictionLogStore()
+
+    monkeypatch.setattr("src.main.prediction_log_store", dummy_store)
+    monkeypatch.setattr("src.main.extract_features_from_request", lambda payload: [0.1, 0.2, 0.3, 0.4])
+    monkeypatch.setattr("src.main.fusion_model", DummyModel())
+
+    response = client.post(
+        "/predict_emotion",
+        json={
+            "keypoints": [[0.1, 0.2, 0.0] for _ in range(26)],
+            "n_joints": 13,
+        },
+        headers={"X-Request-ID": "req-success-1"},
+    )
+
+    assert response.status_code == 200
+    assert len(dummy_store.calls) == 1
+
+    log_entry = dummy_store.calls[0]
+    assert log_entry["request_id"] == "req-success-1"
+    assert log_entry["status_code"] == 200
+    assert log_entry["input_type"] == "keypoints"
+    assert log_entry["joint_count"] == 13
+    assert log_entry["frame_count"] == 2
+    assert log_entry["feature_count"] == 4
+    assert log_entry["predicted_emotion"] == "happy"
+    assert log_entry["confidence_level"] == "medium"
+
+
+def test_failed_prediction_is_logged(monkeypatch):
+    dummy_store = DummyPredictionLogStore()
+
+    def raise_feature_error(payload):
+        raise ValueError("bad payload")
+
+    monkeypatch.setattr("src.main.prediction_log_store", dummy_store)
+    monkeypatch.setattr("src.main.extract_features_from_request", raise_feature_error)
+
+    response = client.post(
+        "/predict_emotion",
+        json={"keypoints": []},
+        headers={"X-Request-ID": "req-fail-1"},
+    )
+
+    assert response.status_code == 422
+    assert len(dummy_store.calls) == 1
+
+    log_entry = dummy_store.calls[0]
+    assert log_entry["request_id"] == "req-fail-1"
+    assert log_entry["status_code"] == 422
+    assert log_entry["input_type"] == "keypoints"
+    assert "특징 추출 실패" in log_entry["error_message"]

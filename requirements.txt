@@ -10,6 +10,8 @@ fastapi==0.123.9
 uvicorn==0.38.0
 starlette==0.50.0
 python-multipart==0.0.20
+SQLAlchemy==2.0.41
+psycopg[binary]==3.2.12
 
 # --- 데이터 처리 ---
 # Python 3.12에서는 numpy 1.24.x 휠이 없어 설치 실패하므로 버전 분기

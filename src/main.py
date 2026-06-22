@@ -1,12 +1,16 @@
 from pathlib import Path
-from typing import List
+from time import perf_counter
+from typing import Any, Dict, List, Optional
+import uuid
 
 import joblib
 import numpy as np
 
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+
+from src.prediction_logging import prediction_log_store
 
 
 APP_VERSION = "2.0.0"
@@ -73,7 +77,106 @@ async def health():
         "status": "healthy",
         "service": "gait-emotion-recognition",
         "version": APP_VERSION,
+        "prediction_logging": prediction_log_store.health_payload(),
     }
+
+
+def parse_optional_int(value: Any) -> Optional[int]:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def detect_input_type(request_body: Dict[str, Any]) -> str:
+    if request_body.get("skeleton_data") is not None:
+        return "skeleton_data"
+    if request_body.get("keypoints") is not None:
+        return "keypoints"
+    return "unknown"
+
+
+def resolve_joint_count(request_body: Dict[str, Any], input_type: str) -> Optional[int]:
+    if "n_joints" in request_body:
+        return parse_optional_int(request_body.get("n_joints"))
+
+    if input_type == "skeleton_data":
+        return DEFAULT_SKELETON_JOINTS
+
+    if input_type == "keypoints":
+        return DEFAULT_KEYPOINT_JOINTS
+
+    return None
+
+
+def estimate_frame_count(request_body: Dict[str, Any], joint_count: Optional[int]) -> Optional[int]:
+    if joint_count is None or joint_count <= 0:
+        return None
+
+    sequence = None
+    if request_body.get("skeleton_data") is not None:
+        sequence = request_body.get("skeleton_data")
+    elif request_body.get("keypoints") is not None:
+        sequence = request_body.get("keypoints")
+
+    if not isinstance(sequence, list) or not sequence:
+        return None
+
+    total_points = len(sequence)
+    if total_points % joint_count != 0:
+        return None
+
+    return total_points // joint_count
+
+
+def build_request_preview(request_body: Dict[str, Any], sample_limit: int = 5) -> Dict[str, Any]:
+    preview: Dict[str, Any] = {
+        "keys": sorted(request_body.keys()),
+    }
+
+    extra_fields = {}
+    for key, value in request_body.items():
+        if key in {"keypoints", "skeleton_data"}:
+            continue
+        if isinstance(value, (str, int, float, bool)) or value is None:
+            extra_fields[key] = value
+
+    if extra_fields:
+        preview["extra_fields"] = extra_fields
+
+    keypoints = request_body.get("keypoints")
+    if keypoints is not None:
+        if isinstance(keypoints, list):
+            preview["keypoints_count"] = len(keypoints)
+            preview["keypoints_sample"] = keypoints[:sample_limit]
+        else:
+            preview["keypoints_type"] = type(keypoints).__name__
+
+    skeleton_data = request_body.get("skeleton_data")
+    if skeleton_data is not None:
+        if isinstance(skeleton_data, list):
+            preview["skeleton_data_count"] = len(skeleton_data)
+            preview["skeleton_data_sample"] = skeleton_data[:sample_limit]
+        else:
+            preview["skeleton_data_type"] = type(skeleton_data).__name__
+
+    return preview
+
+
+def resolve_client_host(http_request: Request) -> Optional[str]:
+    forwarded_for = http_request.headers.get("x-forwarded-for")
+    if forwarded_for:
+        return forwarded_for.split(",", 1)[0].strip()
+
+    if http_request.client is not None:
+        return http_request.client.host
+
+    return None
+
+
+def resolve_request_id(http_request: Request) -> str:
+    request_id = http_request.headers.get("x-request-id", "").strip()
+    return request_id or str(uuid.uuid4())
 
 
 def convert_keypoints_to_skeleton_data(
@@ -142,19 +245,69 @@ def pad_features_if_needed(features: List[float], model) -> List[float]:
 
 
 @app.post("/predict_emotion", tags=["main"])
-async def predict_emotion_endpoint(request: dict):
+async def predict_emotion_endpoint(payload: dict, http_request: Request):
+    started_at = perf_counter()
+    request_id = resolve_request_id(http_request)
+    input_type = detect_input_type(payload)
+    joint_count = resolve_joint_count(payload, input_type)
+    frame_count = estimate_frame_count(payload, joint_count)
+    request_preview = build_request_preview(payload)
+    client_host = resolve_client_host(http_request)
+
+    def write_prediction_log(
+        *,
+        status_code: int,
+        feature_count: Optional[int] = None,
+        predicted_emotion: Optional[str] = None,
+        confidence: Optional[float] = None,
+        confidence_level: Optional[str] = None,
+        probabilities: Optional[Dict[str, float]] = None,
+        error_message: Optional[str] = None,
+    ) -> None:
+        prediction_log_store.save_prediction(
+            request_id=request_id,
+            route=http_request.url.path,
+            client_host=client_host,
+            input_type=input_type,
+            joint_count=joint_count,
+            frame_count=frame_count,
+            feature_count=feature_count,
+            status_code=status_code,
+            predicted_emotion=predicted_emotion,
+            confidence=confidence,
+            confidence_level=confidence_level,
+            latency_ms=round((perf_counter() - started_at) * 1000, 3),
+            request_preview=request_preview,
+            probabilities=probabilities,
+            error_message=error_message,
+        )
+
     try:
-        features = extract_features_from_request(request)
+        features = extract_features_from_request(payload)
     except Exception as e:
-        raise HTTPException(status_code=422, detail=f"특징 추출 실패: {e}")
+        detail = f"특징 추출 실패: {e}"
+        write_prediction_log(status_code=422, error_message=detail)
+        raise HTTPException(status_code=422, detail=detail)
 
     if fusion_model is None:
-        raise HTTPException(status_code=503, detail="모델 파일 로드 실패. 서버 점검 필요.")
+        detail = "모델 파일 로드 실패. 서버 점검 필요."
+        write_prediction_log(
+            status_code=503,
+            feature_count=len(features),
+            error_message=detail,
+        )
+        raise HTTPException(status_code=503, detail=detail)
 
     try:
         features = pad_features_if_needed(features, fusion_model)
     except Exception as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        detail = str(e)
+        write_prediction_log(
+            status_code=422,
+            feature_count=len(features),
+            error_message=detail,
+        )
+        raise HTTPException(status_code=422, detail=detail)
 
     try:
         X = np.array(features, dtype=float).reshape(1, -1)
@@ -168,9 +321,15 @@ async def predict_emotion_endpoint(request: dict):
             "low"
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"서버 내부 오류: {str(e)}")
+        detail = f"서버 내부 오류: {str(e)}"
+        write_prediction_log(
+            status_code=500,
+            feature_count=len(features),
+            error_message=detail,
+        )
+        raise HTTPException(status_code=500, detail=detail)
 
-    return {
+    response_payload = {
         "emotion": emotion,
         "confidence": confidence,
         "confidence_level": confidence_level,
@@ -181,6 +340,17 @@ async def predict_emotion_endpoint(request: dict):
         "features_shape": list(X.shape),
         "message": "감정이 성공적으로 예측되었습니다.",
     }
+
+    write_prediction_log(
+        status_code=200,
+        feature_count=len(features),
+        predicted_emotion=emotion,
+        confidence=confidence,
+        confidence_level=confidence_level,
+        probabilities=response_payload["probabilities"],
+    )
+
+    return response_payload
 
 
 if FRONTEND_DIR.is_dir():

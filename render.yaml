@@ -7,3 +7,15 @@ services:
     dockerfilePath: ./Dockerfile
     autoDeployTrigger: commit
     healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: gait-emotion-recognition-db
+          property: connectionString
+
+databases:
+  - name: gait-emotion-recognition-db
+    plan: free
+    databaseName: gait_emotion_logs
+    user: gait_emotion_app
+    ipAllowList: []
