@@ -1,0 +1,28 @@
+{
+  "dataset_name": "mov_probe",
+  "labels_csv": "D:/datasets/upperbody_probe_mov/labels.csv",
+  "videos_dir": "D:/datasets/upperbody_probe_mov/videos",
+  "keypoint_cache_dir": "D:/datasets/upperbody_probe_mov/extracted_keypoints",
+  "output_dir": "./outputs/experiments/mov_probe",
+  "video_extensions": [".mov"],
+  "pose_backend": "yolo_pose",
+  "max_frames": 180,
+  "sample_every": 1,
+  "resize_width": 640,
+  "resize_height": 480,
+  "trim_start_ratio": 0.05,
+  "trim_end_ratio": 0.05,
+  "min_detected_frames": 8,
+  "evaluation_mode": "4class",
+  "data_group": "mov_probe",
+  "label_mapping": {
+    "happy": "happy",
+    "sad": "sad",
+    "angry": "angry",
+    "neutral": "neutral"
+  },
+  "classifier_name": "logreg",
+  "random_state": 42,
+  "n_splits": 5,
+  "use_group_split": true
+}

@@ -21,6 +21,67 @@ let pose = null;
 let camera = null;
 let isWebcamActive = false;
 
+function getWebcamStartupErrorMessage(error) {
+    const hostname = window.location.hostname;
+    const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
+
+    if (!window.isSecureContext && !isLocalhost) {
+        return '웹캠은 HTTPS 또는 localhost에서만 동작합니다. http://localhost:8000/ 또는 HTTPS 주소로 접속하세요.';
+    }
+
+    if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
+        return '이 브라우저/실행 환경에서는 카메라 API를 사용할 수 없습니다. 외부 브라우저에서 http://localhost:8000/ 로 접속해 보세요.';
+    }
+
+    if (typeof window.Camera !== 'function' || typeof window.Pose !== 'function') {
+        return 'MediaPipe 스크립트를 불러오지 못했습니다. 네트워크 연결 또는 CDN 차단 여부를 확인하세요.';
+    }
+
+    if (error?.name === 'NotAllowedError' || error?.name === 'PermissionDeniedError') {
+        return '브라우저에서 카메라 권한이 차단되었습니다. 주소창의 카메라 권한을 허용한 뒤 다시 시도하세요.';
+    }
+
+    if (error?.name === 'NotFoundError' || error?.name === 'DevicesNotFoundError') {
+        return '사용 가능한 카메라를 찾지 못했습니다. 웹캠 연결 상태를 확인하세요.';
+    }
+
+    if (error?.name === 'NotReadableError' || error?.name === 'TrackStartError') {
+        return '다른 앱이 이미 웹캠을 사용 중입니다. Zoom, Teams, 카메라 앱 등을 종료한 뒤 다시 시도하세요.';
+    }
+
+    if (error?.name === 'SecurityError') {
+        return '현재 페이지에서는 웹캠 보안 정책 때문에 카메라를 열 수 없습니다. http://localhost:8000/ 또는 HTTPS 주소를 사용하세요.';
+    }
+
+    return error?.message ? `웹캠 시작 실패: ${error.message}` : '웹캠을 시작하지 못했습니다.';
+}
+
+function normalizeWebcamError(error) {
+    if (error && typeof error === 'object') {
+        return error;
+    }
+
+    const message = String(error || '');
+
+    if (message.includes('NotAllowedError') || message.includes('Permission denied')) {
+        return { name: 'NotAllowedError', message };
+    }
+
+    if (message.includes('NotFoundError') || message.includes('Requested device not found')) {
+        return { name: 'NotFoundError', message };
+    }
+
+    if (message.includes('NotReadableError') || message.includes('TrackStartError')) {
+        return { name: 'NotReadableError', message };
+    }
+
+    if (message.includes('SecurityError')) {
+        return { name: 'SecurityError', message };
+    }
+
+    return { message };
+}
+
 /**
  * 사용자 샘플 데이터: 최소 2프레임, 관절별 [x, y]만 있어도 자동 보완
  */
@@ -261,7 +322,36 @@ function convertToServerFormat(poseLandmarks) {
 }
 async function startWebcam() {
     if (isWebcamActive) { console.log('웹캠이 이미 실행 중입니다.'); return; }
+    const originalAlert = window.alert;
+
+    window.alert = (message) => {
+        const text = String(message || '');
+        if (!text.startsWith('Failed to acquire camera feed')) {
+            originalAlert.call(window, message);
+            return;
+        }
+
+        const normalizedError = normalizeWebcamError(text);
+        console.error('❌ 웹캠 시작 실패:', normalizedError);
+        displayError(getWebcamStartupErrorMessage(normalizedError));
+    };
+
     try {
+        const hostname = window.location.hostname;
+        const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
+
+        if (!window.isSecureContext && !isLocalhost) {
+            throw new Error('INSECURE_CONTEXT');
+        }
+
+        if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
+            throw new Error('MEDIA_DEVICES_UNAVAILABLE');
+        }
+
+        if (typeof window.Camera !== 'function' || typeof window.Pose !== 'function') {
+            throw new Error('MEDIAPIPE_NOT_LOADED');
+        }
+
         if (!pose) {
             pose = new Pose({
                 locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
@@ -275,9 +365,7 @@ async function startWebcam() {
             });
             pose.onResults(onPoseResults);
         }
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
         const videoElement = document.getElementById('webcam');
-        videoElement.srcObject = stream;
         camera = new Camera(videoElement, {
             onFrame: async () => { await pose.send({ image: videoElement }); },
             width: 640,
@@ -294,8 +382,11 @@ async function startWebcam() {
         document.getElementById('analyzeWebcamBtn').disabled = false;
         console.log('✅ 웹캠 시작 성공');
     } catch (error) {
-        console.error('❌ 웹캠 시작 실패:', error);
-        displayError(`웹캠 시작 실패: ${error.message}`);
+        const normalizedError = normalizeWebcamError(error);
+        console.error('❌ 웹캠 시작 실패:', normalizedError);
+        displayError(getWebcamStartupErrorMessage(normalizedError));
+    } finally {
+        window.alert = originalAlert;
     }
 }
 function stopWebcam() {

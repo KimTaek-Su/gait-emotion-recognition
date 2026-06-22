@@ -189,6 +189,24 @@ pip install -r requirements.txt
 uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
+Windows에서는 실행 정책과 가상환경 준비를 한 번에 처리하려면 아래 래퍼를 바로 실행해도 됩니다.
+
+```powershell
+.\scripts\start_local_web.cmd
+```
+
+외부 기기에서 임시 공개 URL로 직접 테스트하려면 별도 터미널에서 아래 래퍼를 실행하세요.
+
+```powershell
+.\scripts\start_public_tunnel.cmd
+```
+
+Render 배포 전에 필수 파일, 모델 아티팩트, Git 상태를 빠르게 확인하려면 아래 점검 스크립트를 사용할 수 있습니다.
+
+```powershell
+.\scripts\render_preflight.cmd
+```
+
 실행 후 접속:
 - Swagger: `http://localhost:8000/docs`
 - Health: `http://localhost:8000/health`

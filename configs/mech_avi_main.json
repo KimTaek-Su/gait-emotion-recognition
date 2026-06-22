@@ -1,0 +1,28 @@
+{
+  "dataset_name": "avi_main",
+  "labels_csv": "D:/datasets/gait_eval_avi/labels.csv",
+  "videos_dir": "D:/datasets/gait_eval_avi/videos",
+  "keypoint_cache_dir": "D:/datasets/gait_eval_avi/extracted_keypoints",
+  "output_dir": "./outputs/experiments/avi_main",
+  "video_extensions": [".avi"],
+  "pose_backend": "point_figure",
+  "max_frames": 180,
+  "sample_every": 1,
+  "resize_width": 640,
+  "resize_height": 480,
+  "trim_start_ratio": 0.05,
+  "trim_end_ratio": 0.05,
+  "min_detected_frames": 5,
+  "evaluation_mode": "4class",
+  "data_group": "avi_main",
+  "label_mapping": {
+    "happy": "happy",
+    "sad": "sad",
+    "angry": "angry",
+    "neutral": "neutral"
+  },
+  "classifier_name": "logreg",
+  "random_state": 42,
+  "n_splits": 2,
+  "use_group_split": false
+}
