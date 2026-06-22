@@ -20,6 +20,8 @@ const MIN_FRAMES = 30;
 let pose = null;
 let camera = null;
 let isWebcamActive = false;
+let activeFacingMode = 'user';
+let isCameraSwitchInProgress = false;
 
 function getWebcamStartupErrorMessage(error) {
     const hostname = window.location.hostname;
@@ -320,8 +322,86 @@ function convertToServerFormat(poseLandmarks) {
     }
     return skeleton_data;
 }
-async function startWebcam() {
-    if (isWebcamActive) { console.log('웹캠이 이미 실행 중입니다.'); return; }
+
+function isMobileDevice() {
+    return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
+}
+
+function getFacingModeLabel(facingMode) {
+    return facingMode === 'environment' ? '후면 카메라' : '전면 카메라';
+}
+
+function updateWebcamButtons() {
+    const switchButton = document.getElementById('switchWebcamBtn');
+    if (!switchButton) {
+        return;
+    }
+
+    switchButton.disabled = !isWebcamActive || isCameraSwitchInProgress || !isMobileDevice();
+    switchButton.textContent = activeFacingMode === 'environment'
+        ? '🔄 전면 카메라'
+        : '🔄 후면 카메라';
+}
+
+function setWebcamStatus(message, className = 'webcam-status') {
+    const status = document.getElementById('webcamStatus');
+    status.textContent = message;
+    status.className = className;
+}
+
+async function releaseCameraResources() {
+    if (camera) {
+        await camera.stop();
+        camera = null;
+    }
+
+    const videoElement = document.getElementById('webcam');
+    if (videoElement && videoElement.srcObject) {
+        videoElement.srcObject.getTracks().forEach(track => track.stop());
+        videoElement.srcObject = null;
+    }
+}
+
+function buildCamera(videoElement, facingMode) {
+    return new Camera(videoElement, {
+        onFrame: async () => { await pose.send({ image: videoElement }); },
+        facingMode,
+        width: 640,
+        height: 480
+    });
+}
+
+async function startCameraWithFallback(videoElement, preferredFacingMode = null) {
+    const requestedFacingMode = preferredFacingMode || (isMobileDevice() ? 'environment' : 'user');
+    const fallbackFacingMode = requestedFacingMode === 'environment' ? 'user' : 'environment';
+
+    camera = buildCamera(videoElement, requestedFacingMode);
+
+    try {
+        await camera.start();
+        return requestedFacingMode;
+    } catch (error) {
+        const normalizedError = normalizeWebcamError(error);
+        const shouldRetryWithFallbackCamera = requestedFacingMode === 'environment' && (
+            normalizedError?.name === 'NotFoundError' ||
+            normalizedError?.name === 'OverconstrainedError' ||
+            String(normalizedError?.message || '').includes('facingMode')
+        );
+
+        if (!shouldRetryWithFallbackCamera) {
+            camera = null;
+            throw normalizedError;
+        }
+
+        console.warn('후면 카메라를 찾지 못해 기본 카메라로 다시 시도합니다.');
+        camera = buildCamera(videoElement, fallbackFacingMode);
+        await camera.start();
+        return fallbackFacingMode;
+    }
+}
+
+async function startWebcam(preferredFacingMode = null, forceRestart = false) {
+    if (isWebcamActive && !forceRestart) { console.log('웹캠이 이미 실행 중입니다.'); return; }
     const originalAlert = window.alert;
 
     window.alert = (message) => {
@@ -365,23 +445,31 @@ async function startWebcam() {
             });
             pose.onResults(onPoseResults);
         }
+
+        if (forceRestart) {
+            await releaseCameraResources();
+        }
+
         const videoElement = document.getElementById('webcam');
-        camera = new Camera(videoElement, {
-            onFrame: async () => { await pose.send({ image: videoElement }); },
-            width: 640,
-            height: 480
-        });
-        await camera.start();
+        const selectedFacingMode = await startCameraWithFallback(videoElement, preferredFacingMode);
+        activeFacingMode = selectedFacingMode;
         isWebcamActive = true;
         skeletonDataBuffer = [];
         document.getElementById('videoContainer').style.display = 'block';
-        document.getElementById('webcamStatus').textContent = '🟢 웹캠 실행 중 - 프레임 수집: 0';
-        document.getElementById('webcamStatus').className = 'webcam-status active';
+        setWebcamStatus(`🟢 ${getFacingModeLabel(selectedFacingMode)} 실행 중 - 프레임 수집: 0`, 'webcam-status active');
         document.getElementById('startWebcamBtn').disabled = true;
         document.getElementById('stopWebcamBtn').disabled = false;
         document.getElementById('analyzeWebcamBtn').disabled = false;
-        console.log('✅ 웹캠 시작 성공');
+        updateWebcamButtons();
+        console.log(`✅ 웹캠 시작 성공 (facingMode=${selectedFacingMode})`);
     } catch (error) {
+        await releaseCameraResources();
+        isWebcamActive = false;
+        document.getElementById('videoContainer').style.display = 'none';
+        document.getElementById('startWebcamBtn').disabled = false;
+        document.getElementById('stopWebcamBtn').disabled = true;
+        document.getElementById('analyzeWebcamBtn').disabled = true;
+        updateWebcamButtons();
         const normalizedError = normalizeWebcamError(error);
         console.error('❌ 웹캠 시작 실패:', normalizedError);
         displayError(getWebcamStartupErrorMessage(normalizedError));
@@ -389,20 +477,36 @@ async function startWebcam() {
         window.alert = originalAlert;
     }
 }
-function stopWebcam() {
-    if (camera) { camera.stop(); camera = null; }
-    const videoElement = document.getElementById('webcam');
-    if (videoElement.srcObject) {
-        videoElement.srcObject.getTracks().forEach(track => track.stop());
-        videoElement.srcObject = null;
+
+async function switchWebcamCamera() {
+    if (!isWebcamActive || isCameraSwitchInProgress) {
+        return;
     }
+
+    isCameraSwitchInProgress = true;
+    updateWebcamButtons();
+
+    const nextFacingMode = activeFacingMode === 'environment' ? 'user' : 'environment';
+    setWebcamStatus(`🔄 ${getFacingModeLabel(nextFacingMode)}로 전환 중...`, 'webcam-status active');
+
+    try {
+        await startWebcam(nextFacingMode, true);
+    } finally {
+        isCameraSwitchInProgress = false;
+        updateWebcamButtons();
+    }
+}
+
+async function stopWebcam() {
+    await releaseCameraResources();
     isWebcamActive = false;
+    activeFacingMode = 'user';
     document.getElementById('videoContainer').style.display = 'none';
-    document.getElementById('webcamStatus').textContent = '웹캠이 꺼져 있습니다';
-    document.getElementById('webcamStatus').className = 'webcam-status';
+    setWebcamStatus('웹캠이 꺼져 있습니다');
     document.getElementById('startWebcamBtn').disabled = false;
     document.getElementById('stopWebcamBtn').disabled = true;
     document.getElementById('analyzeWebcamBtn').disabled = true;
+    updateWebcamButtons();
     console.log('웹캠 중지');
 }
 function onPoseResults(results) {
@@ -422,13 +526,11 @@ function onPoseResults(results) {
     if (skeleton_data) skeletonDataBuffer.push(skeleton_data);
     else { console.warn('Failed to convert pose landmarks to skeleton data'); return; }
     if (skeletonDataBuffer.length > 300) skeletonDataBuffer.shift();
-    const status = document.getElementById('webcamStatus');
+    const facingModeLabel = getFacingModeLabel(activeFacingMode);
     if (skeletonDataBuffer.length >= MIN_FRAMES) {
-        status.textContent = `🔴 수집 완료 - 프레임: ${skeletonDataBuffer.length}개 (분석 가능)`;
-        status.className = 'webcam-status recording';
+        setWebcamStatus(`🔴 ${facingModeLabel} 수집 완료 - 프레임: ${skeletonDataBuffer.length}개 (분석 가능)`, 'webcam-status recording');
     } else {
-        status.textContent = `🟡 프레임 수집 중: ${skeletonDataBuffer.length}/${MIN_FRAMES}`;
-        status.className = 'webcam-status active';
+        setWebcamStatus(`🟡 ${facingModeLabel} 프레임 수집 중: ${skeletonDataBuffer.length}/${MIN_FRAMES}`, 'webcam-status active');
     }
 }
 async function analyzeFromWebcam() {
