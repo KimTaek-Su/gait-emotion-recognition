@@ -324,7 +324,7 @@ docker-compose up --build
 
 ### 예측 로그 저장소
 
-- Render Blueprint에 `gait-emotion-recognition-db` Postgres 인스턴스가 추가되어 있습니다.
+- Render Blueprint에 `gait-emotion-recognition-db-sg` Postgres 인스턴스가 추가되어 있습니다.
 - 웹 서비스에는 `DATABASE_URL`이 자동 주입되며, 앱은 시작 후 첫 예측 요청 시 `prediction_logs` 테이블을 자동 생성합니다.
 - `POST /predict_emotion` 호출마다 요청 요약, 관절/프레임 수, 예측 결과, 신뢰도, 지연 시간, 실패 메시지가 저장됩니다.
 - 보안과 용량을 위해 전체 원본 payload 대신 앞부분 샘플과 개수만 저장합니다.

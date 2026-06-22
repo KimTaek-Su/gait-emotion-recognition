@@ -52,7 +52,7 @@ Then open `http://localhost:8000/`.
 
 The API can persist one structured log row per `POST /predict_emotion` request.
 
-- The default Blueprint now creates `gait-emotion-recognition-db` and wires its private-network connection string to `DATABASE_URL`.
+- The default Blueprint now creates `gait-emotion-recognition-db-sg` in the same `singapore` region as the web service and wires its private-network connection string to `DATABASE_URL`.
 - On first use, the app creates a `prediction_logs` table automatically.
 - Each row stores request metadata, frame/joint counts, prediction result, confidence, latency, and error details.
 - Only a preview of incoming keypoints or skeleton data is stored, not the full raw sequence.
